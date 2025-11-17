@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Services.Mpris
+import Quickshell.Hyprland
 import QtQuick
 import QtMultimedia
 
@@ -41,7 +42,7 @@ ShellRoot {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: 50
-            width: parent.width / 2 - anchors.leftMargin
+            width: parent.width / 6
             height: parent.height
             
             property var currentPlayer: Mpris.players.values[0] || null
@@ -49,16 +50,13 @@ ShellRoot {
             Text {
                 text: {
                     if (parent.currentPlayer && parent.currentPlayer.metadata) {
-                        // Retrieve artist and title from metadata
                         var artist = parent.currentPlayer.metadata["xesam:artist"] || ""
                         var title = parent.currentPlayer.metadata["xesam:title"] || ""
 
-                        // Handle case where artist is an array
                         if (Array.isArray(artist)) {
                             artist = artist.join(", ")
                         }
 
-                        // Combine artist and title
                         if (artist && title) {
                             return artist + " - " + title
                         }
@@ -71,6 +69,47 @@ ShellRoot {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 elide: Text.ElideRight
+            }
+        }
+
+        // Workspaces (dots after music)
+        Row {
+            id: workspaces
+            anchors.left: mediaInfo.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: 0
+            spacing: 12
+
+            Repeater {
+                model: 10 // Number of workspaces
+
+                Rectangle {
+                    width: Hyprland.focusedWorkspace.id === (index + 1) ? 40 : 15
+                    height: 15
+                    radius: 7.5
+                    color: Hyprland.focusedWorkspace.id === (index + 1) ? "#cba6f7" : "#45475a"
+
+                    // Smooth animation for width changes
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    // Smooth animation for color changes
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: Hyprland.dispatch("workspace", (index + 1).toString())
+                    }
+                }
             }
         }
 

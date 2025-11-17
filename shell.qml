@@ -28,6 +28,7 @@ ShellRoot {
             radius: 16
         }
 
+        // Logo
         Image {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
@@ -37,6 +38,7 @@ ShellRoot {
             height: 24
         }
 
+        // Media Info
         Item {
             id: mediaInfo
             anchors.left: parent.left
@@ -47,6 +49,7 @@ ShellRoot {
             
             property var currentPlayer: Mpris.players.values[0] || null
             
+            // Update currentPlayer when players change
             Text {
                 text: {
                     if (parent.currentPlayer && parent.currentPlayer.metadata) {
@@ -72,7 +75,7 @@ ShellRoot {
             }
         }
 
-        // Workspaces (dots after music)
+        // Workspaces
         Row {
             id: workspaces
             anchors.left: mediaInfo.right

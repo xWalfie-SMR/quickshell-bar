@@ -1,0 +1,128 @@
+[
+    {
+        "classes": [
+            {
+                "className": "VirtualDesktopManager",
+                "lineNumber": 7,
+                "methods": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "desktopNumber",
+                                "type": "int"
+                            }
+                        ],
+                        "index": 3,
+                        "lineNumber": 20,
+                        "name": "switchToDesktop",
+                        "returnType": "void"
+                    }
+                ],
+                "object": true,
+                "properties": [
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 0,
+                        "lineNumber": 10,
+                        "name": "currentDesktop",
+                        "notify": "currentDesktopChanged",
+                        "read": "currentDesktop",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 1,
+                        "lineNumber": 11,
+                        "name": "desktopCount",
+                        "notify": "desktopCountChanged",
+                        "read": "desktopCount",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false
+                    }
+                ],
+                "qualifiedClassName": "VirtualDesktopManager",
+                "signals": [
+                    {
+                        "access": "public",
+                        "index": 0,
+                        "lineNumber": 23,
+                        "name": "currentDesktopChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 1,
+                        "lineNumber": 24,
+                        "name": "desktopCountChanged",
+                        "returnType": "void"
+                    }
+                ],
+                "slots": [
+                    {
+                        "access": "private",
+                        "index": 2,
+                        "lineNumber": 27,
+                        "name": "pollDesktopState",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "virtualdesktopmanager.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "VirtualDesktopPlugin",
+                "lineNumber": 11,
+                "object": true,
+                "qualifiedClassName": "VirtualDesktopPlugin",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QQmlEngineExtensionPlugin"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "VirtualDesktopPlugin_VirtualDesktopPlugin.cpp",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "VirtualDesktopPlugin",
+                "lineNumber": 5,
+                "object": true,
+                "qualifiedClassName": "VirtualDesktopPlugin",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QQmlExtensionPlugin"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "plugin.cpp",
+        "outputRevision": 69
+    }
+]

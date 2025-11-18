@@ -1,22 +1,28 @@
-import Quickshell
-import Quickshell.Services.Mpris
-import Quickshell.Hyprland
-import QtQuick
-import QtMultimedia
+pragma ComponentBehavior: Bound
+import QtQuick 6.5
+import QtQuick.Window 6.5
+import VirtualDesktop 1.0
 
-ShellRoot {
-    PanelWindow {
-        anchors {
-            top: true
-            left: true
-            right: true
+Window {
+    id: root
+    visible: true
+    width: Screen.width - 30
+    height: 50
+    x: 15
+    y: 15
+    color: "transparent"
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+
+    VirtualDesktopManager {
+        id: desktopManager
+        onCurrentDesktopChanged: {
+            workspaces.focusedWorkspace = currentDesktop;
         }
-        margins {
-            left: 15
-            right: 15
-            top: 15
-        }
-        height: 50
+    }
+
+    Rectangle {
+        id: panel
+        anchors.fill: parent
         color: "transparent"
 
         // Border + Background Rectangle
@@ -46,27 +52,11 @@ ShellRoot {
             anchors.leftMargin: 50
             width: parent.width / 6
             height: parent.height
-            
-            property var currentPlayer: Mpris.players.values[0] || null
-            
-            // Update currentPlayer when players change
+
+            // Placeholder for media info (Mpris not available on Windows)
             Text {
-                text: {
-                    if (parent.currentPlayer && parent.currentPlayer.metadata) {
-                        var artist = parent.currentPlayer.metadata["xesam:artist"] || ""
-                        var title = parent.currentPlayer.metadata["xesam:title"] || ""
-
-                        if (Array.isArray(artist)) {
-                            artist = artist.join(", ")
-                        }
-
-                        if (artist && title) {
-                            return artist + " - " + title
-                        }
-                    }
-                    return ""
-                }
-                color: "white"
+                text: "No Media Playing"
+                color: "#6c7086"
                 font.pixelSize: 16
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
@@ -83,14 +73,18 @@ ShellRoot {
             anchors.leftMargin: 0
             spacing: 12
 
+            // Mock workspaces (Hyprland not available on Windows)
+            property int focusedWorkspace: 1
+
             Repeater {
                 model: 10 // Number of workspaces
 
                 Rectangle {
-                    width: Hyprland.focusedWorkspace.id === (index + 1) ? 40 : 15
+                    required property int index
+                    width: workspaces.focusedWorkspace === (index + 1) ? 40 : 15
                     height: 15
                     radius: 7.5
-                    color: Hyprland.focusedWorkspace.id === (index + 1) ? "#cba6f7" : "#45475a"
+                    color: workspaces.focusedWorkspace === (index + 1) ? "#cba6f7" : "#45475a"
 
                     // Smooth animation for width changes
                     Behavior on width {
@@ -110,7 +104,9 @@ ShellRoot {
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: Hyprland.dispatch("workspace", (index + 1).toString())
+                        onClicked: {
+                            desktopManager.switchToDesktop(parent.index + 1);
+                        }
                     }
                 }
             }

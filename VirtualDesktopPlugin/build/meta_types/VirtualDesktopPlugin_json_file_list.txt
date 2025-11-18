@@ -1,0 +1,3 @@
+C:/Users/1SMRA-aaljalk223/Documents/quickshell-bar/VirtualDesktopPlugin/build/VirtualDesktopPlugin_autogen/include/../EWIEGA46WW/moc_virtualdesktopmanager.cpp.json
+C:/Users/1SMRA-aaljalk223/Documents/quickshell-bar/VirtualDesktopPlugin/build/VirtualDesktopPlugin_autogen/include/VirtualDesktopPlugin_VirtualDesktopPlugin.moc.json
+C:/Users/1SMRA-aaljalk223/Documents/quickshell-bar/VirtualDesktopPlugin/build/VirtualDesktopPlugin_autogen/include/plugin.moc.json

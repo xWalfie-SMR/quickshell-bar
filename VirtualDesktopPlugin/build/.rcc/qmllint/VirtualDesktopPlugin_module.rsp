@@ -1,0 +1,6 @@
+-I
+C:/Qt/6.10.0/msvc2022_64/qml
+--resource
+C:/Users/1SMRA-aaljalk223/Documents/quickshell-bar/VirtualDesktopPlugin/build/.qt/rcc/qmake_VirtualDesktop.qrc
+--module
+VirtualDesktop

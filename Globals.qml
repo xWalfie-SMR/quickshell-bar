@@ -3,5 +3,5 @@ import QtQuick
 
 QtObject {
     property string fontFamily: "Comfortaa"
-    property int maxMediaInfoLength: 38
+    property string iconFont: "JetBrainsMono Nerd Font"
 }

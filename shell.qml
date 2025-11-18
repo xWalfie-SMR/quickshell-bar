@@ -60,36 +60,44 @@ ShellRoot {
             property var currentPlayer: Mpris.players.values[0] || null
             
             // Update currentPlayer when players change
-            Text {
-                text: {
-                    if (parent.currentPlayer && parent.currentPlayer.metadata) {
-                        var artist = parent.currentPlayer.metadata["xesam:artist"] || ""
-                        var title = parent.currentPlayer.metadata["xesam:title"] || ""
-
-                        if (Array.isArray(artist)) {
-                            artist = artist.join(", ")
-                        }
-
-                        var fullText = ""
-                        if (artist && title) {
-                            fullText = artist + " - " + title
-                        }
-
-                        if (fullText.length > Globals.maxMediaInfoLength) {
-                            return fullText.substring(0, Globals.maxMediaInfoLength - 3) + "..."
-                        } else {
-                            return fullText
-                        }
-                    }
-                    return ""
-                }
-                color: "white"
-                font.pixelSize: 16
-                font.family: Globals.fontFamily
+            Row {
+                spacing: 10
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.left: parent.left
-                anchors.right: parent.right
-                elide: Text.ElideRight
+                anchors.leftMargin: 5
+
+                Text {
+                    text: "󰎈"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: Globals.iconFont
+                    anchors.verticalCenter: parent.verticalCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                Text {
+                    text: {
+                        if (mediaInfo.currentPlayer && mediaInfo.currentPlayer.metadata) {
+                            var artist = mediaInfo.currentPlayer.metadata["xesam:artist"] || ""
+                            var title = mediaInfo.currentPlayer.metadata["xesam:title"] || ""
+
+                            if (Array.isArray(artist)) {
+                                artist = artist.join(", ")
+                            }
+
+                            var fullText = ""
+                            if (artist && title) {
+                                fullText = artist + " - " + title
+                            }
+                            return fullText
+                        }
+                        return "No media playing"
+                    }
+                    color: "white"
+                    font.pixelSize: 16
+                    font.family: Globals.fontFamily
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
         }
 
@@ -104,7 +112,7 @@ ShellRoot {
                 model: 10 // Number of workspaces
 
                 Rectangle {
-                    width: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id === (index + 1)) ? 40 : 20
+                    width: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id === (index + 1)) ? 60 : 20
                     height: 20
                     radius: 10
                     color: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id === (index + 1)) ? "#cba6f7" : "#45475a"
@@ -142,16 +150,50 @@ ShellRoot {
                 interval: 1000
                 running: true
                 repeat: true
-                onTriggered: timeText.text = Qt.formatDateTime(new Date(), "h:mm a | ddd dd/MM")
+                onTriggered: {
+                    timeText.text = Qt.formatDateTime(new Date(), "ddd dd/MM")
+                    timeHour.text = Qt.formatDateTime(new Date(), "h:mma")
+                }
             }
-            Text {
-                id: timeText
-                text: Qt.formatDateTime(new Date(), "h:mm a | ddd dd/MM")
-                color: "white"
-                font.pixelSize: 16
-                font.family: Globals.fontFamily
+            Row {
+                spacing: 10
                 anchors.right: parent.right
+                anchors.rightMargin: 5
                 anchors.verticalCenter: parent.verticalCenter
+
+                Text {
+                    text: "󰥔"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: Globals.iconFont
+                    anchors.verticalCenter: parent.verticalCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                Text {
+                    id: timeHour
+                    text: Qt.formatDateTime(new Date(), "h:mma")
+                    color: "white"
+                    font.pixelSize: 16
+                    font.family: Globals.fontFamily
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Rectangle {
+                    width: 2
+                    height: parent.parent.parent.height - 10
+                    color: "#45475a"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    id: timeText
+                    text: Qt.formatDateTime(new Date(), "ddd dd/MM")
+                    color: "white"
+                    font.pixelSize: 16
+                    font.family: Globals.fontFamily
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
         }
 
@@ -204,13 +246,27 @@ ShellRoot {
 
             Component.onCompleted: initialVolume.running = true
 
-            Text {
-                id: volumeText
-                text: volume.volumeLevel ? "Vol: " + volume.volumeLevel + "%" : "Vol: --"
-                color: "white"
-                font.pixelSize: 16
-                font.family: Globals.fontFamily
+            Row {
+                spacing: 10
                 anchors.centerIn: parent
+
+                Text {
+                    text: "󰕾"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: Globals.iconFont
+                    anchors.verticalCenter: parent.verticalCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                Text {
+                    id: volumeText
+                    text: volume.volumeLevel ? volume.volumeLevel + "%" : "--"
+                    color: "white"
+                    font.pixelSize: 16
+                    font.family: Globals.fontFamily
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
         }
     }

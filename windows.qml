@@ -55,7 +55,7 @@ Window {
                 Rectangle {
                     required property var modelData
                     required property int index
-                    
+
                     width: 15
                     height: 15
                     radius: 7.5
@@ -64,7 +64,7 @@ Window {
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            windowManager.activateWindow(parent.index)
+                            windowManager.activateWindow(parent.index);
                         }
                     }
 

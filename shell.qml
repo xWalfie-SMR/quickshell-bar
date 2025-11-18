@@ -87,7 +87,7 @@ ShellRoot {
                 model: 10 // Number of workspaces
 
                 Rectangle {
-                    width: Hyprland.focusedWorkspace.id === (index + 1) ? 40 : 15
+                    width: Hyprland.focusedWorkspace.id === (index + 1) ? 30 : 15
                     height: 15
                     radius: 7.5
                     color: Hyprland.focusedWorkspace.id === (index + 1) ? "#cba6f7" : "#45475a"

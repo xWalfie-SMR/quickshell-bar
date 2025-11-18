@@ -13,7 +13,6 @@ qt_add_qml_module(VirtualDesktopPlugin
     SOURCES
         virtualdesktopmanager.h
         virtualdesktopmanager.cpp
-        plugin.cpp
 )
 
 target_link_libraries(VirtualDesktopPlugin PRIVATE

@@ -1,129 +1,106 @@
 #include "virtualdesktopmanager.h"
 #include <Windows.h>
-#include <shobjidl.h>
-#include <wrl/client.h>
+#include <QVariantMap>
+#include <QDebug>
 
-using namespace Microsoft::WRL;
+// Structure to hold window enumeration data
+struct EnumWindowsData {
+    QVariantList* windows;
+    HWND activeWindow;
+};
 
-// VK_0 not defined in some SDKs
-#ifndef VK_0
-#define VK_0 0x30
-#endif
+// Callback for EnumWindows
+BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
+    EnumWindowsData* data = reinterpret_cast<EnumWindowsData*>(lParam);
+    
+    if (!IsWindowVisible(hwnd))
+        return TRUE;
+    
+    // Skip windows without titles or with empty titles
+    WCHAR title[256];
+    GetWindowTextW(hwnd, title, 256);
+    if (wcslen(title) == 0)
+        return TRUE;
+    
+    // Skip certain window classes
+    WCHAR className[256];
+    GetClassNameW(hwnd, className, 256);
+    QString classStr = QString::fromWCharArray(className);
+    if (classStr == "Shell_TrayWnd" || classStr == "Progman")
+        return TRUE;
+    
+    QVariantMap windowInfo;
+    windowInfo["title"] = QString::fromWCharArray(title);
+    windowInfo["hwnd"] = (qulonglong)hwnd;
+    windowInfo["isActive"] = (hwnd == data->activeWindow);
+    
+    data->windows->append(windowInfo);
+    return TRUE;
+}
 
 VirtualDesktopManager::VirtualDesktopManager(QObject *parent)
     : QObject(parent)
 {
-    CoInitialize(nullptr);
-    initializeVirtualDesktops();
-
-    m_pollTimer = new QTimer(this);
-    connect(m_pollTimer, &QTimer::timeout, this, &VirtualDesktopManager::pollDesktopState);
-    m_pollTimer->start(200);
+    m_updateTimer = new QTimer(this);
+    connect(m_updateTimer, &QTimer::timeout, this, &VirtualDesktopManager::updateWindows);
+    m_updateTimer->start(500); // Update every 500ms
+    
+    updateWindows();
 }
 
 VirtualDesktopManager::~VirtualDesktopManager()
 {
-    cleanupVirtualDesktops();
-    CoUninitialize();
 }
 
-void VirtualDesktopManager::initializeVirtualDesktops()
+QVariantList VirtualDesktopManager::windows() const
 {
-    // Use the CLSID_VirtualDesktopManager from shobjidl.h
-    HRESULT hr = CoCreateInstance(
-        CLSID_VirtualDesktopManager,
-        nullptr,
-        CLSCTX_ALL,
-        __uuidof(IVirtualDesktopManager),
-        &m_desktopManager);
-
-    if (SUCCEEDED(hr)) {
-        m_desktopCount = detectDesktopCount();
-        m_currentDesktop = detectCurrentDesktop();
-    }
+    return m_windows;
 }
 
-void VirtualDesktopManager::cleanupVirtualDesktops()
+QString VirtualDesktopManager::activeWindowTitle() const
 {
-    if (m_desktopManager) {
-        static_cast<IVirtualDesktopManager*>(m_desktopManager)->Release();
-        m_desktopManager = nullptr;
-    }
+    return m_activeWindowTitle;
 }
 
-int VirtualDesktopManager::currentDesktop() const
+void VirtualDesktopManager::activateWindow(int index)
 {
-    return m_currentDesktop;
-}
-
-int VirtualDesktopManager::desktopCount() const
-{
-    return m_desktopCount;
-}
-
-void VirtualDesktopManager::switchToDesktop(int desktopNumber)
-{
-    if (desktopNumber < 1 || desktopNumber > m_desktopCount)
+    if (index < 0 || index >= m_windows.size())
         return;
-
-    // Use keyboard shortcut simulation as COM API doesn't provide direct switching
-    INPUT inputs[4] = {};
     
-    // Win key down
-    inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = VK_LWIN;
+    QVariantMap windowInfo = m_windows[index].toMap();
+    HWND hwnd = (HWND)windowInfo["hwnd"].toULongLong();
     
-    // Ctrl key down
-    inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = VK_CONTROL;
+    if (IsIconic(hwnd))
+        ShowWindow(hwnd, SW_RESTORE);
     
-    // Desktop number
-    inputs[2].type = INPUT_KEYBOARD;
-    inputs[2].ki.wVk = VK_0 + desktopNumber;
-    
-    // Release all
-    inputs[3].type = INPUT_KEYBOARD;
-    inputs[3].ki.wVk = VK_0 + desktopNumber;
-    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-    
-    SendInput(4, inputs, sizeof(INPUT));
-    
-    // Release Ctrl
-    INPUT release1 = {};
-    release1.type = INPUT_KEYBOARD;
-    release1.ki.wVk = VK_CONTROL;
-    release1.ki.dwFlags = KEYEVENTF_KEYUP;
-    SendInput(1, &release1, sizeof(INPUT));
-    
-    // Release Win
-    INPUT release2 = {};
-    release2.type = INPUT_KEYBOARD;
-    release2.ki.wVk = VK_LWIN;
-    release2.ki.dwFlags = KEYEVENTF_KEYUP;
-    SendInput(1, &release2, sizeof(INPUT));
-
-    m_currentDesktop = desktopNumber;
-    emit currentDesktopChanged();
+    SetForegroundWindow(hwnd);
 }
 
-void VirtualDesktopManager::pollDesktopState()
+void VirtualDesktopManager::updateWindows()
 {
-    int newDesktop = detectCurrentDesktop();
-    if (newDesktop != m_currentDesktop && newDesktop > 0) {
-        m_currentDesktop = newDesktop;
-        emit currentDesktopChanged();
+    QVariantList newWindows;
+    HWND activeWnd = GetForegroundWindow();
+    
+    EnumWindowsData data;
+    data.windows = &newWindows;
+    data.activeWindow = activeWnd;
+    
+    EnumWindows(EnumWindowsProc, (LPARAM)&data);
+    
+    // Get active window title
+    WCHAR activeTitle[256] = {0};
+    if (activeWnd) {
+        GetWindowTextW(activeWnd, activeTitle, 256);
     }
-}
-
-int VirtualDesktopManager::detectCurrentDesktop()
-{
-    // Since Windows doesn't expose current desktop easily,
-    // we'll track it based on our switches
-    return m_currentDesktop;
-}
-
-int VirtualDesktopManager::detectDesktopCount()
-{
-    // Default to 10 workspaces
-    return 10;
+    QString newActiveTitle = QString::fromWCharArray(activeTitle);
+    
+    if (newWindows != m_windows) {
+        m_windows = newWindows;
+        emit windowsChanged();
+    }
+    
+    if (newActiveTitle != m_activeWindowTitle) {
+        m_activeWindowTitle = newActiveTitle;
+        emit activeWindowChanged();
+    }
 }

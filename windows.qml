@@ -14,10 +14,7 @@ Window {
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
 
     VirtualDesktopManager {
-        id: desktopManager
-        onCurrentDesktopChanged: {
-            workspaces.focusedWorkspace = currentDesktop;
-        }
+        id: windowManager
     }
 
     Rectangle {
@@ -44,68 +41,37 @@ Window {
             height: 24
         }
 
-        // Media Info
-        Item {
-            id: mediaInfo
+        // Windows/Tasks
+        Row {
+            id: windowTasks
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: 50
-            width: parent.width / 6
-            height: parent.height
-
-            // Placeholder for media info (Mpris not available on Windows)
-            Text {
-                text: "No Media Playing"
-                color: "#6c7086"
-                font.pixelSize: 16
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.left: parent.left
-                anchors.right: parent.right
-                elide: Text.ElideRight
-            }
-        }
-
-        // Workspaces
-        Row {
-            id: workspaces
-            anchors.left: mediaInfo.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 0
             spacing: 12
 
-            // Mock workspaces (Hyprland not available on Windows)
-            property int focusedWorkspace: 1
-
             Repeater {
-                model: 10 // Number of workspaces
+                model: windowManager.windows
 
                 Rectangle {
+                    required property var modelData
                     required property int index
-                    width: workspaces.focusedWorkspace === (index + 1) ? 40 : 15
+                    
+                    width: 15
                     height: 15
                     radius: 7.5
-                    color: workspaces.focusedWorkspace === (index + 1) ? "#cba6f7" : "#45475a"
-
-                    // Smooth animation for width changes
-                    Behavior on width {
-                        NumberAnimation {
-                            duration: 200
-                            easing.type: Easing.OutCubic
-                        }
-                    }
-
-                    // Smooth animation for color changes
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: 200
-                            easing.type: Easing.OutCubic
-                        }
-                    }
+                    color: modelData.isActive ? "#cba6f7" : "#45475a"
 
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            desktopManager.switchToDesktop(parent.index + 1);
+                            windowManager.activateWindow(parent.index)
+                        }
+                    }
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
                         }
                     }
                 }

@@ -324,11 +324,12 @@ ShellRoot {
             id: volume
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            anchors.rightMargin: 20
+            anchors.rightMargin: 22.5
             width: 80
             height: parent.height
 
             property string volumeLevel: ""
+            property bool muted: false
 
             Process {
                 id: volumeProcess
@@ -357,19 +358,62 @@ ShellRoot {
                 }
             }
 
-            Component.onCompleted: initialVolume.running = true
+            Process {
+                id: muteStatus
+                command: ["bash", "-c", "pactl get-sink-mute @DEFAULT_SINK@ | grep -oE 'yes|no'"]
+                stdout: SplitParser {
+                    onRead: data => {
+                        volume.muted = (data.trim() === "yes")
+                    }
+                }
+            }
+
+            Component.onCompleted: {
+                initialVolume.running = true
+                muteStatus.running = true
+            }
 
             Row {
-                spacing: 10
+                spacing: 5
                 anchors.centerIn: parent
+                clip: false
 
-                Text {
-                    text: "󰕾"
-                    color: "#cba6f7"
-                    font.pixelSize: 20
-                    font.family: Globals.iconFont
+                MouseArea {
                     anchors.verticalCenter: parent.verticalCenter
-                    verticalAlignment: Text.AlignVCenter
+                    width: 28; height: 28
+                    onClicked: {
+                        if (volume.muted) {
+                            muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 0"]
+                        } else {
+                            muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 1"]
+                        }
+                        muteToggle.running = true
+                        muteStatusRefresh.start()
+                    }
+                                            Timer {
+                                                id: muteStatusRefresh
+                                                interval: 150
+                                                repeat: false
+                                                onTriggered: muteStatus.running = true
+                                            }
+                                Process {
+                                    id: muteToggle
+                                    command: []
+                                }
+                    cursorShape: Qt.PointingHandCursor
+                    property real iconOpacity: hovered ? 0.6 : 1.0
+                    hoverEnabled: true
+                    onEntered: iconOpacity = 0.6
+                    onExited: iconOpacity = 1.0
+                    Text {
+                        text: volume.muted ? "󰖁" : "󰕾"
+                        color: "#cba6f7"
+                        font.pixelSize: 20
+                        font.family: Globals.iconFont
+                        anchors.centerIn: parent
+                        verticalAlignment: Text.AlignVCenter
+                        opacity: parent.iconOpacity
+                    }
                 }
 
                 Text {

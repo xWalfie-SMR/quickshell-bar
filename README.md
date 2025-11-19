@@ -47,51 +47,16 @@ Edit `shell.qml` to customize:
 - Visual Studio 2019 or later with C++ desktop development workload
 - Windows 10/11
 
-### Build Steps
+### Quick Build
 
-1. **Open Developer Command Prompt for Visual Studio**
+Use the automated build script:
 
-   ```
-   Start Menu -> Visual Studio 2022 -> Developer Command Prompt for VS 2022
-   ```
+```powershell
+cd path\to\quickshell-bar\windows
+.\build.ps1
+```
 
-2. **Navigate to the plugin directory**
-
-   ```cmd
-   cd path\to\quickshell-bar\windows\VirtualDesktopPlugin
-   ```
-
-3. **Create build directory**
-
-   ```cmd
-   mkdir build
-   cd build
-   ```
-
-4. **Configure with CMake**
-
-   ```cmd
-   cmake .. -G "NMake Makefiles" -DCMAKE_PREFIX_PATH="C:\Qt\6.5.0\msvc2019_64"
-   ```
-
-   _Note: Adjust the Qt path to match your Qt installation_
-
-5. **Build the plugin**
-
-   ```cmd
-   nmake
-   ```
-
-6. **Copy the plugin to QML imports directory**
-
-   From the build directory, copy the built files:
-
-   ```cmd
-   copy VirtualDesktopPlugin.dll ..\VirtualDesktop\
-   copy qmldir ..\VirtualDesktop\
-   ```
-
-   The plugin files should now be in `quickshell-bar\windows\VirtualDesktop\` alongside the qmldir file.
+The script will configure, build, and set up everything automatically.
 
 ### Running the Application (Windows)
 
@@ -105,9 +70,15 @@ qml .\windows.qml
 
 ### Windows Features
 
-- Click on workspace indicators to switch virtual desktops (uses Win+Ctrl+Number)
-- The bar will automatically track which desktop you're on
+- Click on workspace indicators to switch virtual desktops
+- The bar automatically tracks which desktop you're on
 - Works with Windows 10/11 virtual desktops
+
+### Documentation
+
+- **[BUILD.md](windows/BUILD.md)** - Detailed build instructions (automated and manual)
+- **[PLUGIN_QUICK_START.md](windows/PLUGIN_QUICK_START.md)** - 5-minute plugin usage guide
+- **[PLUGIN_USAGE.md](windows/PLUGIN_USAGE.md)** - Comprehensive plugin documentation
 
 ### Troubleshooting (Windows)
 
@@ -117,6 +88,7 @@ If the plugin doesn't load:
 2. Verify the plugin DLL was built successfully
 3. Check that qmldir file is in the same directory as the DLL
 4. Run with `QML_IMPORT_TRACE=1` to see import debugging
+5. See [PLUGIN_USAGE.md](windows/PLUGIN_USAGE.md#troubleshooting) for more help
 
 ## License
 

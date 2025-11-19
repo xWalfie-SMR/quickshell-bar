@@ -2,14 +2,14 @@
 # This script automatically builds the VirtualDesktopPlugin for Windows
 
 param(
-    [string]$QtPath = "C:\Qt\6.5.0\msvc2019_64",
+    [string]$QtPath = "",
     [switch]$Clean = $false
 )
 
 # Colors for output
-$Green = "Green"
-$Red = "Red"
-$Yellow = "Yellow"
+$Green = [System.ConsoleColor]::Green
+$Red = [System.ConsoleColor]::Red
+$Yellow = [System.ConsoleColor]::Yellow
 
 function Write-ColorOutput($message, $color) {
     Write-Host $message -ForegroundColor $color
@@ -19,6 +19,51 @@ function Test-Admin {
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Find-QtInstallation {
+    $qtBase = "C:\Qt"
+    
+    if (-not (Test-Path $qtBase)) {
+        return $null
+    }
+    
+    $versions = @()
+    
+    # Search for Qt 6.x versions
+    Get-ChildItem -Path $qtBase -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $versionDir = $_.FullName
+        $versionName = $_.Name
+        
+        # Look for msvc2022_64 or msvc2019_64 subdirectories
+        @("msvc2022_64", "msvc2019_64", "msvc2021_64", "msvc2020_64") | ForEach-Object {
+            $toolchainPath = Join-Path $versionDir $_
+            if (Test-Path $toolchainPath) {
+                # Check if bin directory exists (indicates valid Qt installation)
+                $binPath = Join-Path $toolchainPath "bin"
+                if (Test-Path $binPath) {
+                    $versions += @{
+                        Path = $toolchainPath
+                        Version = $versionName
+                        Toolchain = $_
+                    }
+                }
+            }
+        }
+    }
+    
+    if ($versions.Count -eq 0) {
+        return $null
+    }
+    
+    # Sort by version number (descending) and return the latest
+    $versions = $versions | Sort-Object {
+        # Extract version numbers for comparison (e.g., "6.6.0" -> [6, 6, 0])
+        $versionParts = $_.Version -split '\.' | ForEach-Object { [int]$_ -as [int] }
+        [version]($versionParts -join '.')
+    } -Descending
+    
+    return $versions[0].Path
 }
 
 # Check if running as administrator
@@ -38,6 +83,22 @@ Write-ColorOutput "========================================" $Green
 Write-ColorOutput "Quickshell Bar Windows Build Script" $Green
 Write-ColorOutput "========================================" $Green
 Write-ColorOutput ""
+
+# Auto-detect Qt path if not provided
+if ([string]::IsNullOrWhiteSpace($QtPath)) {
+    Write-ColorOutput "Searching for Qt installation..." $Green
+    $detectedPath = Find-QtInstallation
+    
+    if ($detectedPath) {
+        $QtPath = $detectedPath
+        Write-ColorOutput "Auto-detected Qt at: $QtPath" $Green
+    } else {
+        Write-ColorOutput "Error: Qt installation not found" $Red
+        Write-ColorOutput "Please specify the correct Qt path using -QtPath parameter" $Yellow
+        Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
+        exit 1
+    }
+}
 
 # Check if Qt path exists
 if (-not (Test-Path $QtPath)) {

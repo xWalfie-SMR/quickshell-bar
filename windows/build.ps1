@@ -39,6 +39,9 @@ function Find-QtInstallation {
         }
     }
     
+    # List of toolchain directories to look for
+    $toolchains = @("msvc2022_64", "msvc2019_64", "msvc2021_64", "msvc2020_64", "mingw_64")
+    
     $qtPaths = @("C:\Qt", "C:\Qt\6.*", "C:\Program Files\Qt", "C:\Program Files (x86)\Qt")
     $versions = @()
     
@@ -53,26 +56,42 @@ function Find-QtInstallation {
                     continue
                 }
                 
-                # Search for Qt 6.x versions
+                # Get all child directories
                 Get-ChildItem -Path $qtBaseDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-                    $versionDir = $_.FullName
-                    $versionName = $_.Name
+                    $childDir = $_.FullName
+                    $childName = $_.Name
                     
-                    Write-ColorOutput "Checking Qt version: $versionName" $Yellow
-                    
-                    # Look for msvc2022_64 or msvc2019_64 subdirectories
-                    @("msvc2022_64", "msvc2019_64", "msvc2021_64", "msvc2020_64", "mingw_64") | ForEach-Object {
-                        $toolchainPath = Join-Path $versionDir $_
-                        if (Test-Path $toolchainPath) {
-                            # Check if bin directory exists (indicates valid Qt installation)
-                            $binPath = Join-Path $toolchainPath "bin"
-                            if (Test-Path $binPath) {
-                                $versions += @{
-                                    Path = $toolchainPath
-                                    Version = $versionName
-                                    Toolchain = $_
+                    # Check if this child directory is itself a toolchain directory
+                    if ($childName -in $toolchains) {
+                        Write-ColorOutput "Checking toolchain directory: $childName" $Yellow
+                        # Check if bin directory exists (indicates valid Qt installation)
+                        $binPath = Join-Path $childDir "bin"
+                        if (Test-Path $binPath) {
+                            $versions += @{
+                                Path = $childDir
+                                Version = "unknown"
+                                Toolchain = $childName
+                            }
+                            Write-ColorOutput "Found valid Qt installation: $childDir" $Green
+                        }
+                    } else {
+                        # This might be a version directory, look for toolchain subdirectories
+                        Write-ColorOutput "Checking version directory: $childName" $Yellow
+                        
+                        # Look for toolchain subdirectories
+                        foreach ($toolchain in $toolchains) {
+                            $toolchainPath = Join-Path $childDir $toolchain
+                            if (Test-Path $toolchainPath) {
+                                # Check if bin directory exists (indicates valid Qt installation)
+                                $binPath = Join-Path $toolchainPath "bin"
+                                if (Test-Path $binPath) {
+                                    $versions += @{
+                                        Path = $toolchainPath
+                                        Version = $childName
+                                        Toolchain = $toolchain
+                                    }
+                                    Write-ColorOutput "Found valid Qt installation: $toolchainPath" $Green
                                 }
-                                Write-ColorOutput "Found valid Qt installation: $toolchainPath" $Green
                             }
                         }
                     }
@@ -91,8 +110,15 @@ function Find-QtInstallation {
     # Sort by version number (descending) and return the latest
     $versions = $versions | Sort-Object {
         # Extract version numbers for comparison (e.g., "6.6.0" -> [6, 6, 0])
-        $versionParts = $_.Version -split '\.' | ForEach-Object { [int]$_ -as [int] }
-        [version]($versionParts -join '.')
+        if ($_.Version -eq "unknown") {
+            [version]"0.0.0"
+        } else {
+            $versionParts = $_.Version -split '\.' | ForEach-Object { 
+                $num = $_ -as [int]
+                if ($num -is [int]) { $num } else { 0 }
+            }
+            [version]($versionParts -join '.')
+        }
     } -Descending
     
     return $versions[0].Path

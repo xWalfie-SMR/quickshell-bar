@@ -106,6 +106,133 @@ After a successful build:
    qml .\windows.qml
    ```
 
+## Using the VirtualDesktopPlugin in QML
+
+After building and running, you can use the VirtualDesktopPlugin to interact with Windows virtual desktops in your QML code.
+
+### Import the Plugin
+
+In your QML file, add the import statement:
+
+```qml
+import VirtualDesktop 1.0
+```
+
+### Create a Manager Instance
+
+```qml
+VirtualDesktopManager {
+    id: windowManager
+}
+```
+
+### Access Desktop Information
+
+The `VirtualDesktopManager` exposes several properties:
+
+#### `desktops` (QVariantList)
+
+A list of desktop objects. Each object has:
+- `index`: The desktop index (0-based, so Desktop 1 = index 0)
+- `isActive`: Boolean indicating if this desktop is currently active
+
+**Example: Display desktop indicators**
+
+```qml
+Row {
+    spacing: 10
+
+    Repeater {
+        model: windowManager.desktops
+
+        Rectangle {
+            width: modelData.isActive ? 60 : 20
+            height: 20
+            radius: 10
+            color: modelData.isActive ? "#cba6f7" : "#45475a"
+
+            Behavior on width {
+                NumberAnimation { duration: 200 }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: windowManager.switchToDesktop(index)
+            }
+        }
+    }
+}
+```
+
+#### `currentDesktop` (int)
+
+The 0-based index of the currently active desktop.
+
+```qml
+Text {
+    text: "Current Desktop: " + (windowManager.currentDesktop + 1)
+}
+```
+
+#### `activeWindowTitle` (string)
+
+The title of the currently active window.
+
+```qml
+Text {
+    text: "Active Window: " + windowManager.activeWindowTitle
+}
+```
+
+#### `windows` (QVariantList)
+
+A list of open window objects.
+
+```qml
+Text {
+    text: "Open Windows: " + windowManager.windows.length
+}
+```
+
+### Switch Desktops Programmatically
+
+Use the `switchToDesktop()` method to switch to a specific desktop:
+
+```qml
+// Switch to the third desktop (0-based index)
+windowManager.switchToDesktop(2)
+```
+
+### React to Changes
+
+Connect to signals to respond when the desktop state changes:
+
+```qml
+VirtualDesktopManager {
+    id: windowManager
+
+    onCurrentDesktopChanged: {
+        console.log("Switched to desktop: " + (currentDesktop + 1))
+    }
+
+    onActiveWindowChanged: {
+        console.log("Active window changed: " + activeWindowTitle)
+    }
+
+    onDesktopsChanged: {
+        console.log("Desktop list updated")
+    }
+}
+```
+
+### Complete Example
+
+See `windows.qml` in this directory for a complete working example that implements:
+- Virtual desktop indicators with animations
+- Click-to-switch functionality
+- Time and date display
+- Themed UI with Catppuccin Mauve colors
+
 ## Features
 
 - **Virtual Desktop Indicators**: Click on the desktop indicators to switch between virtual desktops

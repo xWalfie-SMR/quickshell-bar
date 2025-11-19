@@ -186,7 +186,7 @@ try {
     
     # Configure with CMake
     Write-ColorOutput "Configuring with CMake..." $Green
-    $cmakeCommand = "cmake .. -G `"NMake Makefiles`" -DCMAKE_PREFIX_PATH=`"$QtPath`" -DCMAKE_BUILD_TYPE=Release"
+    $cmakeCommand = "cmake `"$pluginDir`" -G `"NMake Makefiles`" -DCMAKE_PREFIX_PATH=`"$QtPath`" -DCMAKE_BUILD_TYPE=Release"
     
     Invoke-Expression $cmakeCommand
     if ($LASTEXITCODE -ne 0) {

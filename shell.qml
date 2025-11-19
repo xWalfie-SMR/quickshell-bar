@@ -40,6 +40,7 @@ ShellRoot {
 
         // Separator after logo
         Rectangle {
+            id: logoSeparator
             anchors.left: parent.left
             anchors.leftMargin: 54
             anchors.verticalCenter: parent.verticalCenter
@@ -48,18 +49,130 @@ ShellRoot {
             color: "#45475a"
         }
 
-        // Media Info
+        // Media Controls Container (properly sized to center controls)
+        Item {
+            id: mediaControlsContainer
+            anchors.left: logoSeparator.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: 130
+            height: parent.height
+            
+            property var currentPlayer: Mpris.players.values[0] || null
+
+            Row {
+                spacing: 24
+                anchors.centerIn: parent
+                visible: mediaControlsContainer.currentPlayer !== null
+
+                // Previous button
+                Text {
+                    text: "󰒮"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: Globals.iconFont
+                    anchors.verticalCenter: parent.verticalCenter
+                    verticalAlignment: Text.AlignVCenter
+                    opacity: mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoPrevious ? 1.0 : 0.5
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoPrevious) {
+                                mediaControlsContainer.currentPlayer.previous()
+                            }
+                        }
+                        hoverEnabled: true
+                        onEntered: if (mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoPrevious) parent.opacity = 0.8
+                        onExited: parent.opacity = mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoPrevious ? 1.0 : 0.5
+                    }
+                }
+
+                // Play/Pause button
+                Text {
+                    text: mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.playbackState === MprisPlaybackState.Playing ? "󰏤" : "󰐊"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: Globals.iconFont
+                    anchors.verticalCenter: parent.verticalCenter
+                    verticalAlignment: Text.AlignVCenter
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (mediaControlsContainer.currentPlayer) {
+                                if (mediaControlsContainer.currentPlayer.playbackState === MprisPlaybackState.Playing) {
+                                    if (mediaControlsContainer.currentPlayer.canPause) {
+                                        mediaControlsContainer.currentPlayer.pause()
+                                    }
+                                } else {
+                                    if (mediaControlsContainer.currentPlayer.canPlay) {
+                                        mediaControlsContainer.currentPlayer.play()
+                                    }
+                                }
+                            }
+                        }
+                        hoverEnabled: true
+                        onEntered: parent.opacity = 0.8
+                        onExited: parent.opacity = 1.0
+                    }
+                }
+
+                // Next button
+                Text {
+                    text: "󰒭"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: Globals.iconFont
+                    anchors.verticalCenter: parent.verticalCenter
+                    verticalAlignment: Text.AlignVCenter
+                    opacity: mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoNext ? 1.0 : 0.5
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoNext) {
+                                mediaControlsContainer.currentPlayer.next()
+                            }
+                        }
+                        hoverEnabled: true
+                        onEntered: if (mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoNext) parent.opacity = 0.8
+                        onExited: parent.opacity = mediaControlsContainer.currentPlayer && mediaControlsContainer.currentPlayer.canGoNext ? 1.0 : 0.5
+                    }
+                }
+            }
+        }
+
+        // Separator after media controls
+        Rectangle {
+            id: mediaControlsSeparator
+            anchors.left: mediaControlsContainer.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: 2
+            height: parent.height - 10
+            color: "#45475a"
+            visible: mediaControlsContainer.currentPlayer !== null
+        }
+
+        // Media Info (song text)
         Item {
             id: mediaInfo
-            anchors.left: parent.left
+            anchors.left: mediaControlsSeparator.right
             anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 66
-            width: parent.width / 6
+            anchors.leftMargin: 10
+            width: parent.width / 3 - 20
             height: parent.height
             
             property var currentPlayer: Mpris.players.values[0] || null
             
-            // Update currentPlayer when players change
+            // Function to truncate text
+            function truncateText(text, maxLength) {
+                if (text.length <= maxLength) return text
+                return text.substring(0, maxLength) + "..."
+            }
+            
             Row {
                 spacing: 10
                 anchors.verticalCenter: parent.verticalCenter
@@ -89,7 +202,7 @@ ShellRoot {
                             if (artist && title) {
                                 fullText = artist + " - " + title
                             }
-                            return fullText
+                            return mediaInfo.truncateText(fullText, 50)
                         }
                         return "No media playing"
                     }

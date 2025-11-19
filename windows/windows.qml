@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick 6.5
 import QtQuick.Window 6.5
+import QtCore 6.5
 import VirtualDesktop 1.0
 
 Window {
@@ -35,36 +36,46 @@ Window {
         Image {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 15
+            anchors.leftMargin: 20
             source: "../arch-mauve.svg"
             width: 24
             height: 24
         }
 
-        // Windows/Tasks
-        Row {
-            id: windowTasks
+        // Separator after logo
+        Rectangle {
             anchors.left: parent.left
+            anchors.leftMargin: 54
             anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 50
+            width: 2
+            height: parent.height - 10
+            color: "#45475a"
+        }
+
+        // Virtual Desktops/Workspaces
+        Row {
+            id: desktops
+            anchors.left: parent.left
+            anchors.leftMargin: 70
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 12
 
             Repeater {
-                model: windowManager.windows
+                model: windowManager.desktops
 
                 Rectangle {
                     required property var modelData
                     required property int index
 
-                    width: 15
-                    height: 15
-                    radius: 7.5
+                    width: modelData.isActive ? 60 : 20
+                    height: 20
+                    radius: 10
                     color: modelData.isActive ? "#cba6f7" : "#45475a"
 
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: {
-                            windowManager.activateWindow(parent.index);
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
                         }
                     }
 
@@ -74,25 +85,73 @@ Window {
                             easing.type: Easing.OutCubic
                         }
                     }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            windowManager.switchToDesktop(index);
+                        }
+                    }
                 }
             }
         }
 
+        // Time and Date
         Item {
             id: time
-            anchors.centerIn: parent
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.rightMargin: 20
+
             Timer {
                 interval: 1000
                 running: true
                 repeat: true
-                onTriggered: timeText.text = Qt.formatDateTime(new Date(), "h:mm a | ddd dd/MM")
+                onTriggered: {
+                    timeText.text = Qt.formatDateTime(new Date(), "ddd dd/MM")
+                    timeHour.text = Qt.formatDateTime(new Date(), "h:mm a")
+                }
             }
-            Text {
-                id: timeText
-                text: Qt.formatDateTime(new Date(), "h:mm a | ddd dd/MM")
-                color: "white"
-                font.pixelSize: 16
-                anchors.centerIn: parent
+
+            Row {
+                spacing: 10
+                anchors.right: parent.right
+                anchors.rightMargin: 5
+                anchors.verticalCenter: parent.verticalCenter
+
+                Text {
+                    text: "󰥔"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: "JetBrainsMono Nerd Font"
+                    anchors.verticalCenter: parent.verticalCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                Text {
+                    id: timeHour
+                    text: Qt.formatDateTime(new Date(), "h:mm a")
+                    color: "white"
+                    font.pixelSize: 16
+                    font.family: "Comfortaa"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Rectangle {
+                    width: 2
+                    height: parent.parent.parent.height - 10
+                    color: "#45475a"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Text {
+                    id: timeText
+                    text: Qt.formatDateTime(new Date(), "ddd dd/MM")
+                    color: "white"
+                    font.pixelSize: 16
+                    font.family: "Comfortaa"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
         }
     }

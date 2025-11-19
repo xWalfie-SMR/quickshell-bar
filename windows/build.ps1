@@ -24,59 +24,151 @@ function Test-Admin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Find-QtInstallation {
-    # Check common environment variables first
-    $envVars = @("QTDIR", "QT_ROOT", "CMAKE_PREFIX_PATH", "Qt6_DIR")
-    foreach ($envVar in $envVars) {
-        $envPath = [Environment]::GetEnvironmentVariable($envVar, "Machine")
-        if (-not $envPath) {
-            $envPath = [Environment]::GetEnvironmentVariable($envVar, "User")
-        }
-        if ($envPath -and (Test-Path $envPath)) {
-            Write-ColorOutput "Found Qt via environment variable $envVar`: $envPath" $Green
-            return $envPath
-        }
+function Request-AdminElevation {
+    param([string]$ScriptPath, [array]$Arguments)
+    
+    Write-ColorOutput "This script requires Administrator privileges to install Qt." $Yellow
+    Write-ColorOutput "Requesting elevation..." $Yellow
+    
+    Write-ColorOutput "Please re-run this script from an elevated PowerShell (right-click PowerShell and choose 'Run as Administrator')." $Yellow
+    return $false
+}
+
+function Refresh-Path {
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+
+function Test-CommandExists {
+    param([string]$Command)
+    
+    # First check if it's in PATH
+    if (Get-Command $Command -ErrorAction SilentlyContinue) {
+        return $true
     }
     
-    # List of toolchain directories to look for
-    $toolchains = @("msvc2022_64", "msvc2019_64", "msvc2021_64", "msvc2020_64", "mingw_64")
+    # Refresh PATH and try again (in case something was just installed)
+    Refresh-Path
+    if (Get-Command $Command -ErrorAction SilentlyContinue) {
+        return $true
+    }
     
-    $qtPaths = @("C:\Qt", "C:\Qt\6.*", "C:\Program Files\Qt", "C:\Program Files (x86)\Qt")
-    $versions = @()
-    
-    foreach ($qtBase in $qtPaths) {
-        $resolvedPaths = Resolve-Path $qtBase -ErrorAction SilentlyContinue
-        if ($resolvedPaths) {
-            foreach ($path in $resolvedPaths) {
-                Write-ColorOutput "Searching in Qt base directory: $path" $Green
-                
-                # Look for version directories (like 6.6.0, 6.5.0, etc.)
-                $versionDirs = Get-ChildItem -Path $path -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' }
-                foreach ($versionDir in $versionDirs) {
-                    Write-ColorOutput "Checking version directory: $($versionDir.Name)" $Green
-                    
-                    # Look for toolchain directories within version directory
-                    foreach ($toolchain in $toolchains) {
-                        $toolchainPath = Join-Path $versionDir.FullName $toolchain
-                        if (Test-Path $toolchainPath) {
-                            Write-ColorOutput "Found valid Qt installation: $toolchainPath" $Green
-                            return $toolchainPath
-                        }
-                    }
-                }
-                
-                # Also check if the base directory itself is a toolchain directory
-                foreach ($toolchain in $toolchains) {
-                    if ($path.Name -eq $toolchain) {
-                        Write-ColorOutput "Found valid Qt installation: $path" $Green
-                        return $path
-                    }
+    return $false
+}
+
+# Locate an existing Qt installation (search env vars, common paths, and toolchains)
+function Find-QtInstallation {
+    # Check common environment variables first
+    $envVars = @('QTDIR','QT_ROOT','CMAKE_PREFIX_PATH','Qt6_DIR')
+    foreach ($envVar in $envVars) {
+        $envPath = [Environment]::GetEnvironmentVariable($envVar, 'Machine')
+        if (-not $envPath) { $envPath = [Environment]::GetEnvironmentVariable($envVar, 'User') }
+        if ($envPath -and (Test-Path $envPath)) { return $envPath }
+    }
+
+    # Preferred toolchains (prioritize MSVC 2022)
+    $toolchains = @('msvc2022_64','msvc2021_64','msvc2019_64','msvc2020_64','mingw_64')
+
+    # Common base locations to search
+    $qtBases = @('C:\Qt','C:\Qt\6.*','C:\Program Files\Qt','C:\Program Files (x86)\Qt',$env:USERPROFILE+'\Qt','C:\Qt6')
+
+    foreach ($base in $qtBases) {
+        $resolved = Resolve-Path $base -ErrorAction SilentlyContinue
+        if (-not $resolved) { continue }
+        foreach ($r in $resolved) {
+            # Look for version directories like 6.6.0
+            $versions = Get-ChildItem -Path $r -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
+            foreach ($v in $versions) {
+                foreach ($t in $toolchains) {
+                    $candidate = Join-Path $v.FullName $t
+                    if (Test-Path $candidate) { return $candidate }
                 }
             }
         }
     }
-    
+
     return $null
+}
+
+function Install-QtViaAqt {
+    Write-ColorOutput "Installing Qt6 via Python aqtinstall (unattended)..." $Green
+    Write-ColorOutput "This may take some time (downloading Qt archives)." $Yellow
+
+    # Desired Qt version and toolchain
+    $qtVersion = '6.6.0'
+    $toolchain = 'msvc2022_64'
+    $installBase = "C:\Qt\$qtVersion"
+
+    # Find Python executable (prefer 'python', fallback to 'py')
+    $pyExe = $null
+    $pyExtraArgs = @()
+    if (Get-Command python -ErrorAction SilentlyContinue) { $pyExe = 'python' }
+    elseif (Get-Command py -ErrorAction SilentlyContinue) { $pyExe = 'py'; $pyExtraArgs = @('-3') }
+
+    if (-not $pyExe) {
+        Write-ColorOutput "Python 3 is required but was not found on PATH. Please install Python 3 and ensure 'python' or 'py' is available." $Red
+        throw "Python 3 not found"
+    }
+    # Ensure pip and aqtinstall are installed
+    try {
+        $pipArgs = $pyExtraArgs + @('-m','pip','install','--upgrade','pip','aqtinstall')
+        Write-ColorOutput "Ensuring pip and aqtinstall are installed via: $pyExe $($pipArgs -join ' ')" $Green
+        & $pyExe @pipArgs 2>&1 | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) { throw "Failed to install aqtinstall via pip" }
+    } catch {
+        Write-ColorOutput "Error installing aqtinstall: $($_.Exception.Message)" $Red
+        throw $_
+    }
+
+    # Run aqtinstall to fetch Qt
+    try {
+        Write-ColorOutput "Attempting to install Qt $qtVersion using known architecture tokens (may try several)..." $Green
+
+        # Try several MSVC2022 token variants first (some mirrors/name schemes use toolset suffixes like _143)
+        $candidateTokens = @(
+            'win64_msvc2022_143', 'win64_msvc2022_64', 'win64_msvc2022',
+            'win64_msvc2021_64','win64_msvc2019_64','win64_mingw'
+        )
+        $selectedArch = $null
+        foreach ($candidate in $candidateTokens) {
+            Write-ColorOutput "Trying architecture token: $candidate" $Yellow
+            $aqtArgs = $pyExtraArgs + @('-m','aqt') + @('install-qt','windows','desktop',$qtVersion,$candidate,'--outputdir',$installBase)
+            & $pyExe @aqtArgs 2>&1 | ForEach-Object { Write-Host $_ }
+            if ($LASTEXITCODE -eq 0) {
+                $selectedArch = $candidate
+                break
+            } else {
+                Write-ColorOutput "Install with $candidate failed (exit $LASTEXITCODE), trying next token..." $Yellow
+            }
+        }
+
+        if (-not $selectedArch) {
+            Write-ColorOutput "All known architecture tokens failed to install Qt $qtVersion. Please run 'python -m aqt list-qt windows desktop' to inspect available tokens and run the script with -QtPath manually." $Red
+            throw "aqtinstall failed for all known tokens"
+        }
+        Write-ColorOutput "Qt installation succeeded with architecture token: $selectedArch" $Green
+    } catch {
+        Write-ColorOutput "Error during aqtinstall: $($_.Exception.Message)" $Red
+        throw $_
+    }
+
+    # Expected installed path: use the selected architecture token (e.g. 'win64_msvc2019_64')
+    $qtPath = Join-Path $installBase $selectedArch
+    if (Test-Path $qtPath) {
+        Write-ColorOutput "Qt installed successfully at: $qtPath" $Green
+        return $qtPath
+    }
+
+    # Fallback: attempt to locate any matching installed directory under $installBase
+    if (Test-Path $installBase) {
+        $found = Get-ChildItem -Path $installBase -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match [Regex]::Escape($selectedArch) -or $_.Name -match $toolchain }
+        if ($found) {
+            $qtPath = $found[0].FullName
+            Write-ColorOutput "Qt installed (found at: $qtPath)" $Green
+            return $qtPath
+        }
+    }
+
+    throw "Qt installation completed but Qt path not found under $installBase (expected token: $selectedArch)"
 }
 
 # Check if running as Administrator
@@ -104,9 +196,33 @@ if (-not $QtPath) {
         Write-ColorOutput "Auto-detected Qt at: $QtPath" $Green
     } else {
         Write-ColorOutput "Error: Qt installation not found" $Red
-        Write-ColorOutput "Please specify the correct Qt path using -QtPath parameter" $Yellow
-        Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
-        exit 1
+        Write-ColorOutput "The build needs a Qt kit (for example: C:\Qt\6.6.0\msvc2022_64)." $Yellow
+        Write-ColorOutput ""
+        
+        # Offer automated installation (uses Python aqtinstall)
+        $answer = Read-Host "Qt not found. Install Qt automatically using Python aqtinstall? (Y/N) [Y]"
+        if (-not $answer) { $answer = 'Y' }
+
+        if ($answer.Trim().ToUpper().StartsWith('Y')) {
+            if (-not (Test-Admin)) {
+                Write-ColorOutput "Administrator privileges are required to install Qt. Please re-run this script from an elevated PowerShell (Run as Administrator)." $Yellow
+                exit
+            }
+
+            try {
+                $QtPath = Install-QtViaAqt
+            } catch {
+                Write-ColorOutput "Error during Qt installation: $($_.Exception.Message)" $Red
+                Write-ColorOutput ""
+                Write-ColorOutput "Please install Qt manually and specify the path:" $Yellow
+                Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
+                exit 1
+            }
+        } else {
+            Write-ColorOutput "Please specify the correct Qt path using -QtPath parameter" $Yellow
+            Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
+            exit 1
+        }
     }
 }
 
@@ -169,6 +285,7 @@ try {
     }
     
     # Verify that nmake and cl are available
+    Refresh-Path
     try {
         $nmakeVersion = nmake /? 2>&1 | Select-Object -First 1
         if ($LASTEXITCODE -eq 0) {
@@ -187,7 +304,7 @@ try {
     # Configure with CMake
     Write-ColorOutput "Configuring with CMake..." $Green
     $cmakeCommand = "cmake `"$pluginDir`" -G `"NMake Makefiles`" -DCMAKE_PREFIX_PATH=`"$QtPath`" -DCMAKE_BUILD_TYPE=Release"
-    
+
     Invoke-Expression $cmakeCommand
     if ($LASTEXITCODE -ne 0) {
         Write-ColorOutput "CMake configuration failed!" $Red
@@ -239,7 +356,7 @@ try {
         Write-ColorOutput "Copied plugin.cpp" $Green
     }
     
-    $headerFiles = Get-ChildItem -Path $pluginDir -Filter "*.h"
+    $headerFiles = Get-ChildItem -Path $pluginDir -Filter "*.h" -ErrorAction SilentlyContinue
     foreach ($header in $headerFiles) {
         Copy-Item -Path $header.FullName -Destination $outputDir -Force
         Write-ColorOutput "Copied header: $($header.Name)" $Green

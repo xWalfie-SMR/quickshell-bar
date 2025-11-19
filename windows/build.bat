@@ -26,9 +26,33 @@ REM Check for admin rights (optional warning)
 echo Checking prerequisites...
 if not exist "%QT_PATH%" (
     echo Error: Qt path not found at %QT_PATH%
-    echo Please specify the correct Qt path:
-    echo   build.bat "C:\Qt\6.6.0\msvc2022_64"
-    exit /b 1
+    echo.
+    choice /M "Qt not found. Install Qt via vcpkg and continue?"
+    if errorlevel 2 (
+        echo Please specify the correct Qt path and re-run the script.
+        echo   build.bat "C:\Qt\6.6.0\msvc2022_64"
+        exit /b 1
+    )
+
+    echo Installing Qt via vcpkg (headless). This may take a long time...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "try {
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host 'git required. Install git and retry.'; exit 1 }
+        $v = 'C:\vcpkg'
+        if (-not (Test-Path $v)) { git clone https://github.com/microsoft/vcpkg.git $v }
+        if (-not (Test-Path (Join-Path $v 'vcpkg.exe'))) { & (Join-Path $v 'bootstrap-vcpkg.bat') }
+        & (Join-Path $v 'vcpkg.exe') install qt6-base:x64-windows
+    } catch { Write-Host 'vcpkg install failed: ' $_.Exception.Message; exit 1 }"
+
+    if errorlevel 1 (
+        echo vcpkg installation failed.
+        exit /b 1
+    )
+
+    set VCPKG_ROOT=C:\vcpkg
+    set VCPKG_TOOLCHAIN=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
+    set QT_PATH=%VCPKG_ROOT%\installed\x64-windows
+    set USE_VCPKG=1
+    echo Set QT_PATH to %QT_PATH%
 )
 
 echo Using Qt from: %QT_PATH%
@@ -65,10 +89,18 @@ if errorlevel 1 (
 REM Configure with CMake
 echo.
 echo Configuring with CMake...
-cmake .. -G "NMake Makefiles" -DCMAKE_PREFIX_PATH="%QT_PATH%" -DCMAKE_BUILD_TYPE=Release
-if errorlevel 1 (
-    echo CMake configuration failed!
-    exit /b 1
+if defined USE_VCPKG (
+    cmake .. -G "NMake Makefiles" -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%" -DVCPKG_TARGET_TRIPLET="x64-windows" -DCMAKE_BUILD_TYPE=Release
+    if errorlevel 1 (
+        echo CMake configuration failed!
+        exit /b 1
+    )
+) else (
+    cmake .. -G "NMake Makefiles" -DCMAKE_PREFIX_PATH="%QT_PATH%" -DCMAKE_BUILD_TYPE=Release
+    if errorlevel 1 (
+        echo CMake configuration failed!
+        exit /b 1
+    )
 )
 
 echo CMake configuration completed successfully.

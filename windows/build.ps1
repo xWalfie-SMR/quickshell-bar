@@ -1,4 +1,3 @@
-# Quickshell Bar Windows Build Script
 # This script automatically builds the VirtualDesktopPlugin for Windows
 
 param(
@@ -49,104 +48,57 @@ function Find-QtInstallation {
         $resolvedPaths = Resolve-Path $qtBase -ErrorAction SilentlyContinue
         if ($resolvedPaths) {
             foreach ($path in $resolvedPaths) {
-                $qtBaseDir = $path.Path
-                Write-ColorOutput "Searching in Qt base directory: $qtBaseDir" $Yellow
+                Write-ColorOutput "Searching in Qt base directory: $path" $Green
                 
-                if (-not (Test-Path $qtBaseDir)) {
-                    continue
+                # Look for version directories (like 6.6.0, 6.5.0, etc.)
+                $versionDirs = Get-ChildItem -Path $path -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' }
+                foreach ($versionDir in $versionDirs) {
+                    Write-ColorOutput "Checking version directory: $($versionDir.Name)" $Green
+                    
+                    # Look for toolchain directories within version directory
+                    foreach ($toolchain in $toolchains) {
+                        $toolchainPath = Join-Path $versionDir.FullName $toolchain
+                        if (Test-Path $toolchainPath) {
+                            Write-ColorOutput "Found valid Qt installation: $toolchainPath" $Green
+                            return $toolchainPath
+                        }
+                    }
                 }
                 
-                # Get all child directories
-                Get-ChildItem -Path $qtBaseDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-                    $childDir = $_.FullName
-                    $childName = $_.Name
-                    
-                    # Check if this child directory is itself a toolchain directory
-                    if ($childName -in $toolchains) {
-                        Write-ColorOutput "Checking toolchain directory: $childName" $Yellow
-                        # Check if bin directory exists (indicates valid Qt installation)
-                        $binPath = Join-Path $childDir "bin"
-                        if (Test-Path $binPath) {
-                            $versions += @{
-                                Path = $childDir
-                                Version = "unknown"
-                                Toolchain = $childName
-                            }
-                            Write-ColorOutput "Found valid Qt installation: $childDir" $Green
-                        }
-                    } else {
-                        # This might be a version directory, look for toolchain subdirectories
-                        Write-ColorOutput "Checking version directory: $childName" $Yellow
-                        
-                        # Look for toolchain subdirectories
-                        foreach ($toolchain in $toolchains) {
-                            $toolchainPath = Join-Path $childDir $toolchain
-                            if (Test-Path $toolchainPath) {
-                                # Check if bin directory exists (indicates valid Qt installation)
-                                $binPath = Join-Path $toolchainPath "bin"
-                                if (Test-Path $binPath) {
-                                    $versions += @{
-                                        Path = $toolchainPath
-                                        Version = $childName
-                                        Toolchain = $toolchain
-                                    }
-                                    Write-ColorOutput "Found valid Qt installation: $toolchainPath" $Green
-                                }
-                            }
-                        }
+                # Also check if the base directory itself is a toolchain directory
+                foreach ($toolchain in $toolchains) {
+                    if ($path.Name -eq $toolchain) {
+                        Write-ColorOutput "Found valid Qt installation: $path" $Green
+                        return $path
                     }
                 }
             }
         }
     }
     
-    if ($versions.Count -eq 0) {
-        Write-ColorOutput "No valid Qt installations found in common locations" $Yellow
-        Write-ColorOutput "Searched in: $($qtPaths -join ', ')" $Yellow
-        Write-ColorOutput "Checked environment variables: $($envVars -join ', ')" $Yellow
-        return $null
-    }
-    
-    # Sort by version number (descending) and return the latest
-    $versions = $versions | Sort-Object {
-        # Extract version numbers for comparison (e.g., "6.6.0" -> [6, 6, 0])
-        if ($_.Version -eq "unknown") {
-            [version]"0.0.0"
-        } else {
-            $versionParts = $_.Version -split '\.' | ForEach-Object { 
-                $num = $_ -as [int]
-                if ($num -is [int]) { $num } else { 0 }
-            }
-            [version]($versionParts -join '.')
-        }
-    } -Descending
-    
-    return $versions[0].Path
+    return $null
 }
 
-# Check if running as administrator
+# Check if running as Administrator
 if (-not (Test-Admin)) {
-    Write-ColorOutput "This script needs to be run as Administrator." $Red
-    Write-ColorOutput "Please run: powershell -RunAs Administrator $PSCommandPath" $Yellow
-    exit 1
+    Write-ColorOutput "Warning: Not running as Administrator. Some operations may fail." $Yellow
 }
-
-# Get the script directory
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$pluginDir = Join-Path $scriptDir "VirtualDesktopPlugin"
-$buildDir = Join-Path $pluginDir "build"
-$outputDir = Join-Path $scriptDir "VirtualDesktop"
 
 Write-ColorOutput "========================================" $Green
 Write-ColorOutput "Quickshell Bar Windows Build Script" $Green
 Write-ColorOutput "========================================" $Green
 Write-ColorOutput ""
 
-# Auto-detect Qt path if not provided
-if ([string]::IsNullOrWhiteSpace($QtPath)) {
+# Set paths
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$pluginDir = Join-Path $scriptDir "VirtualDesktopPlugin"
+$buildDir = Join-Path $scriptDir "build"
+$outputDir = Join-Path $scriptDir "output"
+
+# Find Qt installation if not specified
+if (-not $QtPath) {
     Write-ColorOutput "Searching for Qt installation..." $Green
     $detectedPath = Find-QtInstallation
-    
     if ($detectedPath) {
         $QtPath = $detectedPath
         Write-ColorOutput "Auto-detected Qt at: $QtPath" $Green
@@ -188,6 +140,50 @@ if (-not (Test-Path $buildDir)) {
 Push-Location $buildDir
 
 try {
+    # Setup Visual Studio environment for NMake
+    Write-ColorOutput "Setting up Visual Studio environment..." $Green
+    
+    # Try to find and run vcvarsall.bat
+    $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (Test-Path $vsWhere) {
+        $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if ($vsPath) {
+            $vcvarsall = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
+            if (Test-Path $vcvarsall) {
+                Write-ColorOutput "Found Visual Studio at: $vsPath" $Green
+                Write-ColorOutput "Running vcvarsall.bat to set up build environment..." $Green
+                cmd /c "`"$vcvarsall`" x64 && set" | ForEach-Object {
+                    if ($_ -match '^(.+?)=(.*)$') {
+                        [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+                    }
+                }
+                Write-ColorOutput "Visual Studio environment configured successfully." $Green
+            } else {
+                Write-ColorOutput "Warning: vcvarsall.bat not found at $vcvarsall" $Yellow
+            }
+        } else {
+            Write-ColorOutput "Warning: Visual Studio installation not found with required C++ tools" $Yellow
+        }
+    } else {
+        Write-ColorOutput "Warning: Visual Studio installer (vswhere.exe) not found" $Yellow
+    }
+    
+    # Verify that nmake and cl are available
+    try {
+        $nmakeVersion = nmake /? 2>&1 | Select-Object -First 1
+        if ($LASTEXITCODE -eq 0) {
+            Write-ColorOutput "NMake is available" $Green
+        } else {
+            throw "NMake not found"
+        }
+    } catch {
+        Write-ColorOutput "Error: NMake not found in PATH. Make sure Visual Studio is properly installed and configured." $Red
+        Write-ColorOutput "You may need to run this script from a Developer Command Prompt, or install Visual Studio with C++ tools." $Yellow
+        exit 1
+    }
+    
+    Write-ColorOutput ""
+    
     # Configure with CMake
     Write-ColorOutput "Configuring with CMake..." $Green
     $cmakeCommand = "cmake .. -G `"NMake Makefiles`" -DCMAKE_PREFIX_PATH=`"$QtPath`" -DCMAKE_BUILD_TYPE=Release"
@@ -246,22 +242,20 @@ try {
     $headerFiles = Get-ChildItem -Path $pluginDir -Filter "*.h"
     foreach ($header in $headerFiles) {
         Copy-Item -Path $header.FullName -Destination $outputDir -Force
-        Write-ColorOutput "Copied $(Split-Path $header.FullName -Leaf)" $Green
+        Write-ColorOutput "Copied header: $($header.Name)" $Green
     }
     
     Write-ColorOutput ""
-    Write-ColorOutput "========================================" $Green
-    Write-ColorOutput "Build Complete!" $Green
-    Write-ColorOutput "========================================" $Green
-    Write-ColorOutput ""
-    Write-ColorOutput "Plugin files are located in:" $Green
-    Write-ColorOutput "$outputDir" $Yellow
-    Write-ColorOutput ""
-    Write-ColorOutput "To run the application:" $Green
-    Write-ColorOutput "`$env:QML2_IMPORT_PATH = `"$scriptDir`"" $Yellow
-    Write-ColorOutput "qml .\windows.qml" $Yellow
+    Write-ColorOutput "Build completed successfully!" $Green
+    Write-ColorOutput "Output files are available in: $outputDir" $Green
     
+} catch {
+    Write-ColorOutput "Error during build: $($_.Exception.Message)" $Red
+    exit 1
 } finally {
     # Return to original directory
     Pop-Location
 }
+
+Write-ColorOutput ""
+Write-ColorOutput "Build script finished." $Green

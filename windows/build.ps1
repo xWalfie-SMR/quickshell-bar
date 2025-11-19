@@ -12,7 +12,11 @@ $Red = [System.ConsoleColor]::Red
 $Yellow = [System.ConsoleColor]::Yellow
 
 function Write-ColorOutput($message, $color) {
-    Write-Host $message -ForegroundColor $color
+    if ($null -eq $color) {
+        Write-Host $message
+    } else {
+        Write-Host $message -ForegroundColor $color
+    }
 }
 
 function Test-Admin {
@@ -22,30 +26,55 @@ function Test-Admin {
 }
 
 function Find-QtInstallation {
-    $qtBase = "C:\Qt"
-    
-    if (-not (Test-Path $qtBase)) {
-        return $null
+    # Check common environment variables first
+    $envVars = @("QTDIR", "QT_ROOT", "CMAKE_PREFIX_PATH", "Qt6_DIR")
+    foreach ($envVar in $envVars) {
+        $envPath = [Environment]::GetEnvironmentVariable($envVar, "Machine")
+        if (-not $envPath) {
+            $envPath = [Environment]::GetEnvironmentVariable($envVar, "User")
+        }
+        if ($envPath -and (Test-Path $envPath)) {
+            Write-ColorOutput "Found Qt via environment variable $envVar`: $envPath" $Green
+            return $envPath
+        }
     }
     
+    $qtPaths = @("C:\Qt", "C:\Qt\6.*", "C:\Program Files\Qt", "C:\Program Files (x86)\Qt")
     $versions = @()
     
-    # Search for Qt 6.x versions
-    Get-ChildItem -Path $qtBase -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-        $versionDir = $_.FullName
-        $versionName = $_.Name
-        
-        # Look for msvc2022_64 or msvc2019_64 subdirectories
-        @("msvc2022_64", "msvc2019_64", "msvc2021_64", "msvc2020_64") | ForEach-Object {
-            $toolchainPath = Join-Path $versionDir $_
-            if (Test-Path $toolchainPath) {
-                # Check if bin directory exists (indicates valid Qt installation)
-                $binPath = Join-Path $toolchainPath "bin"
-                if (Test-Path $binPath) {
-                    $versions += @{
-                        Path = $toolchainPath
-                        Version = $versionName
-                        Toolchain = $_
+    foreach ($qtBase in $qtPaths) {
+        $resolvedPaths = Resolve-Path $qtBase -ErrorAction SilentlyContinue
+        if ($resolvedPaths) {
+            foreach ($path in $resolvedPaths) {
+                $qtBaseDir = $path.Path
+                Write-ColorOutput "Searching in Qt base directory: $qtBaseDir" $Yellow
+                
+                if (-not (Test-Path $qtBaseDir)) {
+                    continue
+                }
+                
+                # Search for Qt 6.x versions
+                Get-ChildItem -Path $qtBaseDir -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                    $versionDir = $_.FullName
+                    $versionName = $_.Name
+                    
+                    Write-ColorOutput "Checking Qt version: $versionName" $Yellow
+                    
+                    # Look for msvc2022_64 or msvc2019_64 subdirectories
+                    @("msvc2022_64", "msvc2019_64", "msvc2021_64", "msvc2020_64", "mingw_64") | ForEach-Object {
+                        $toolchainPath = Join-Path $versionDir $_
+                        if (Test-Path $toolchainPath) {
+                            # Check if bin directory exists (indicates valid Qt installation)
+                            $binPath = Join-Path $toolchainPath "bin"
+                            if (Test-Path $binPath) {
+                                $versions += @{
+                                    Path = $toolchainPath
+                                    Version = $versionName
+                                    Toolchain = $_
+                                }
+                                Write-ColorOutput "Found valid Qt installation: $toolchainPath" $Green
+                            }
+                        }
                     }
                 }
             }
@@ -53,6 +82,9 @@ function Find-QtInstallation {
     }
     
     if ($versions.Count -eq 0) {
+        Write-ColorOutput "No valid Qt installations found in common locations" $Yellow
+        Write-ColorOutput "Searched in: $($qtPaths -join ', ')" $Yellow
+        Write-ColorOutput "Checked environment variables: $($envVars -join ', ')" $Yellow
         return $null
     }
     

@@ -33,7 +33,7 @@ ShellRoot {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             anchors.leftMargin: 20
-            source: "../arch-mauve.svg"
+            source: "arch-mauve.svg"
             width: 24
             height: 24
         }

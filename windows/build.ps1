@@ -38,6 +38,35 @@ function Refresh-Path {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 }
 
+function Send-EnvironmentChangeNotification {
+    param(
+        [string]$Target = "Environment"
+    )
+
+    try {
+        if (-not ("EnvChangeBroadcaster" -as [type])) {
+            Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class EnvChangeBroadcaster {
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, int Msg, IntPtr wParam, string lParam, int fuFlags, int uTimeout, out IntPtr lpdwResult);
+}
+"@ -ErrorAction Stop
+        }
+
+        $HWND_BROADCAST = [IntPtr]0xffff
+        $WM_SETTINGCHANGE = 0x001A
+        $SMTO_ABORTIFHUNG = 0x0002
+        $result = [IntPtr]::Zero
+
+        [EnvChangeBroadcaster]::SendMessageTimeout($HWND_BROADCAST, $WM_SETTINGCHANGE, [IntPtr]::Zero, $Target, $SMTO_ABORTIFHUNG, 5000, [ref]$result) | Out-Null
+        Write-ColorOutput ("Broadcasted environment change for {0}." -f $Target) $Green
+    } catch {
+        Write-ColorOutput ("Warning: Unable to broadcast environment change for {0}: {1}" -f $Target, $_.Exception.Message) $Yellow
+    }
+}
+
 function Test-CommandExists {
     param([string]$Command)
     
@@ -550,11 +579,54 @@ set
     Pop-Location
 }
 
+# Configure QML2 import path automatically
+$qmlImportTarget = $scriptDir
+$currentProcessQmlPath = $env:QML2_IMPORT_PATH
+if ([string]::IsNullOrWhiteSpace($currentProcessQmlPath)) {
+    $currentProcessQmlPath = $qmlImportTarget
+} elseif (-not ($currentProcessQmlPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -eq $qmlImportTarget })) {
+    $currentProcessQmlPath = "$currentProcessQmlPath;$qmlImportTarget"
+}
+[System.Environment]::SetEnvironmentVariable("QML2_IMPORT_PATH", $currentProcessQmlPath, "Process")
+Write-ColorOutput "Configured QML2_IMPORT_PATH for this session: $currentProcessQmlPath" $Green
+
+$userQmlPath = [System.Environment]::GetEnvironmentVariable("QML2_IMPORT_PATH", "User")
+$updatedUserQmlPath = $userQmlPath
+if ([string]::IsNullOrWhiteSpace($updatedUserQmlPath)) {
+    $updatedUserQmlPath = $qmlImportTarget
+} elseif (-not ($updatedUserQmlPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -eq $qmlImportTarget })) {
+    $updatedUserQmlPath = "$updatedUserQmlPath;$qmlImportTarget"
+}
+if ($updatedUserQmlPath -ne $userQmlPath) {
+    [System.Environment]::SetEnvironmentVariable("QML2_IMPORT_PATH", $updatedUserQmlPath, "User")
+    Write-ColorOutput "Permanently added QML2 import path for user: $updatedUserQmlPath" $Green
+    Send-EnvironmentChangeNotification -Target "Environment"
+} else {
+    Write-ColorOutput "User QML2 import path already includes: $qmlImportTarget" $Yellow
+}
+
+if (Test-Admin) {
+    $machineQmlPath = [System.Environment]::GetEnvironmentVariable("QML2_IMPORT_PATH", "Machine")
+    $updatedMachineQmlPath = $machineQmlPath
+    if ([string]::IsNullOrWhiteSpace($updatedMachineQmlPath)) {
+        $updatedMachineQmlPath = $qmlImportTarget
+    } elseif (-not ($updatedMachineQmlPath -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -eq $qmlImportTarget })) {
+        $updatedMachineQmlPath = "$updatedMachineQmlPath;$qmlImportTarget"
+    }
+    if ($updatedMachineQmlPath -ne $machineQmlPath) {
+        [System.Environment]::SetEnvironmentVariable("QML2_IMPORT_PATH", $updatedMachineQmlPath, "Machine")
+        Write-ColorOutput "Permanently added QML2 import path for machine: $updatedMachineQmlPath" $Green
+        Send-EnvironmentChangeNotification -Target "Environment"
+    } else {
+        Write-ColorOutput "Machine QML2 import path already includes: $qmlImportTarget" $Yellow
+    }
+} else {
+    Write-ColorOutput "Run this script as Administrator to configure machine-level QML2 import path." $Yellow
+}
+
 Write-ColorOutput ""
 Write-ColorOutput "Build script finished." $Green
-Write-ColorOutput "Reminder: set QML2_IMPORT_PATH to this directory before running 'qml .\windows.qml'" $Yellow
-Write-ColorOutput "Example: Set-Item -Path Env:QML2_IMPORT_PATH -Value '$scriptDir'" $Yellow
-Write-ColorOutput "Then run: qml .\windows.qml" $Yellow
+Write-ColorOutput "You can now run: qml .\windows.qml" $Yellow
 Write-ColorOutput "" $Green
 # Permanently add Qt bin to User PATH
 $currentUserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
@@ -562,6 +634,39 @@ if ($currentUserPath -notlike "*${QtPath}\bin*") {
     $newUserPath = "$currentUserPath;${QtPath}\bin"
     [System.Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
     Write-ColorOutput "Permanently added Qt bin to User PATH: ${QtPath}\bin" $Green
+    Send-EnvironmentChangeNotification -Target "Environment"
 } else {
     Write-ColorOutput "Qt bin already in User PATH: ${QtPath}\bin" $Yellow
+}
+
+# Permanently add Qt bin to Machine PATH when available
+if (Test-Admin) {
+    $machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+    if ($machinePath -notlike "*${QtPath}\bin*") {
+        $newMachinePath = "$machinePath;${QtPath}\bin"
+        [System.Environment]::SetEnvironmentVariable("Path", $newMachinePath, "Machine")
+        Write-ColorOutput "Permanently added Qt bin to Machine PATH: ${QtPath}\bin" $Green
+        Send-EnvironmentChangeNotification -Target "Environment"
+    } else {
+        Write-ColorOutput "Qt bin already in Machine PATH: ${QtPath}\bin" $Yellow
+    }
+} else {
+    Write-ColorOutput "Run this script as Administrator to add Qt bin to Machine PATH." $Yellow
+}
+
+# Ensure current session PATH includes Qt bin for immediate use
+$currentProcessPath = $env:Path
+if ($currentProcessPath -notlike "*${QtPath}\bin*") {
+    $env:Path = "$currentProcessPath;${QtPath}\bin"
+    Write-ColorOutput "Temporarily added Qt bin to current session PATH for immediate use." $Green
+} else {
+    Write-ColorOutput "Current session PATH already includes Qt bin." $Yellow
+}
+
+# Refresh PATH to pick up persisted changes and validate qml availability
+Refresh-Path
+if (Test-CommandExists "qml") {
+    Write-ColorOutput "Verified: 'qml' command is available on PATH." $Green
+} else {
+    Write-ColorOutput "Warning: 'qml' command still not discoverable. Please open a new PowerShell session or ensure Qt tools are installed correctly." $Yellow
 }

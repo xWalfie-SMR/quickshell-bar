@@ -330,6 +330,7 @@ ShellRoot {
 
             property string volumeLevel: ""
             property bool muted: false
+            property bool isToggling: false
 
             Process {
                 id: volumeProcess
@@ -364,6 +365,8 @@ ShellRoot {
                 stdout: SplitParser {
                     onRead: data => {
                         volume.muted = (data.trim() === "yes")
+                        if (volume.isToggling)
+                            volume.isToggling = false
                     }
                 }
             }
@@ -396,12 +399,13 @@ ShellRoot {
                         hoverEnabled: true
                         
                         onClicked: {
-                            if (volume.muted) {
-                                muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 0"]
-                            } else {
-                                muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 1"]
-                            }
+                            if (volume.isToggling)
+                                return
+
+                            volume.isToggling = true
+                            muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ toggle"]
                             muteToggle.running = true
+                            volume.muted = !volume.muted
                             muteStatusRefresh.start()
                         }
 
@@ -412,7 +416,10 @@ ShellRoot {
                             id: muteStatusRefresh
                             interval: 150
                             repeat: false
-                            onTriggered: muteStatus.running = true
+                            onTriggered: {
+                                muteStatus.running = true
+                                volume.isToggling = false
+                            }
                         }
 
                         Process {

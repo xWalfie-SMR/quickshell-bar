@@ -75,7 +75,7 @@ function Find-QtInstallation {
         $resolved = Resolve-Path $base -ErrorAction SilentlyContinue
         if (-not $resolved) { continue }
         foreach ($r in $resolved) {
-            # Look for version directories like 6.6.0
+            # Look for version directories like 6.8.3
             $versions = Get-ChildItem -Path $r -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
             foreach ($v in $versions) {
                 foreach ($t in $toolchains) {
@@ -93,7 +93,7 @@ function Install-QtViaAqt {
     Write-ColorOutput "Installing Qt6 via Python aqtinstall (unattended)..." $Green
     Write-ColorOutput "This may take some time (downloading Qt archives)." $Yellow
 
-    $qtVersion = '6.6.0'
+    $qtVersion = '6.8.3'
     $qtInstallRoot = "C:\Qt"
     $qtVersionDir = Join-Path $qtInstallRoot $qtVersion
 
@@ -125,11 +125,9 @@ function Install-QtViaAqt {
         Write-ColorOutput "Attempting to install Qt $qtVersion using known architecture tokens (may try several)..." $Green
 
         $candidateTokens = @(
-            @{ Token='win64_msvc2022_143'; Toolchain='msvc2022_64' },
             @{ Token='win64_msvc2022_64'; Toolchain='msvc2022_64' },
-            @{ Token='win64_msvc2022'; Toolchain='msvc2022_64' },
-            @{ Token='win64_msvc2021_64'; Toolchain='msvc2021_64' },
-            @{ Token='win64_msvc2019_64'; Toolchain='msvc2019_64' },
+            @{ Token='win64_msvc2022_arm64_cross_compiled'; Toolchain='msvc2022_arm64_cross_compiled' },
+            @{ Token='win64_llvm_mingw'; Toolchain='llvm_mingw_64' },
             @{ Token='win64_mingw'; Toolchain='mingw_64' }
         )
 
@@ -319,7 +317,7 @@ if (-not $QtPath) {
             Write-ColorOutput "Error during Qt installation: $($_.Exception.Message)" $Red
             Write-ColorOutput ""
             Write-ColorOutput "Please install Qt manually and specify the path:" $Yellow
-            Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
+            Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.8.3\msvc2022_64'" $Yellow
             exit 1
         }
     }
@@ -329,7 +327,7 @@ if (-not $QtPath) {
 if (-not (Test-Path $QtPath)) {
     Write-ColorOutput "Error: Qt path not found at $QtPath" $Red
     Write-ColorOutput "Please specify the correct Qt path using -QtPath parameter" $Yellow
-    Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
+    Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.8.3\msvc2022_64'" $Yellow
     exit 1
 }
 
@@ -422,7 +420,7 @@ set
     }
 
     # Verify that nmake and cl are available
-    Refresh-Path
+    # Note: Do NOT call Refresh-Path here as it will overwrite the PATH set by vcvarsall.bat
     $nmakeFound = $false
     try {
         $nmakeTest = Get-Command nmake -ErrorAction SilentlyContinue

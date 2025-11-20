@@ -378,42 +378,47 @@ ShellRoot {
                 anchors.centerIn: parent
                 clip: false
 
-                MouseArea {
+                Text {
+                    id: volumeIcon
+                    width: 28
+                    height: 28
+                    text: volume.muted ? "󰖁" : "󰕾"
+                    color: "#cba6f7"
+                    font.pixelSize: 20
+                    font.family: Globals.iconFont
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 28; height: 28
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                     
-                    onClicked: {
-                        if (volume.muted) {
-                            muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 0"]
-                        } else {
-                            muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 1"]
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        hoverEnabled: true
+                        
+                        onClicked: {
+                            if (volume.muted) {
+                                muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 0"]
+                            } else {
+                                muteToggle.command = ["bash", "-c", "pactl set-sink-mute @DEFAULT_SINK@ 1"]
+                            }
+                            muteToggle.running = true
+                            muteStatusRefresh.start()
                         }
-                        muteToggle.running = true
-                        muteStatusRefresh.start()
-                    }
 
-                    Timer {
-                        id: muteStatusRefresh
-                        interval: 150
-                        repeat: false
-                        onTriggered: muteStatus.running = true
-                    }
+                        onEntered: parent.opacity = 0.6
+                        onExited: parent.opacity = 1.0
 
-                    Process {
-                        id: muteToggle
-                        command: []
-                    }
+                        Timer {
+                            id: muteStatusRefresh
+                            interval: 150
+                            repeat: false
+                            onTriggered: muteStatus.running = true
+                        }
 
-                    Text {
-                        text: volume.muted ? "󰖁" : "󰕾"
-                        color: "#cba6f7"
-                        font.pixelSize: 20
-                        font.family: Globals.iconFont
-                        anchors.centerIn: parent
-                        verticalAlignment: Text.AlignVCenter
-                        opacity: parent.containsMouse ? 0.6 : 1.0
+                        Process {
+                            id: muteToggle
+                            command: []
+                        }
                     }
                 }
 

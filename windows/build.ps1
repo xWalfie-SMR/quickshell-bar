@@ -297,6 +297,7 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $pluginDir = Join-Path $scriptDir "VirtualDesktopPlugin"
 $buildDir = Join-Path $scriptDir "build"
 $outputDir = Join-Path $scriptDir "output"
+$moduleDir = Join-Path $scriptDir "VirtualDesktop"
 
 # Find Qt installation if not specified
 if (-not $QtPath) {
@@ -509,8 +510,37 @@ set
     }
     
     Write-ColorOutput ""
+    Write-ColorOutput "Deploying VirtualDesktop QML module..." $Green
+    
+    if (-not (Test-Path $moduleDir)) {
+        New-Item -ItemType Directory -Path $moduleDir | Out-Null
+        Write-ColorOutput "Created module directory: $moduleDir" $Green
+    }
+    
+    if (Test-Path $dllPath) {
+        Copy-Item -Path $dllPath -Destination $moduleDir -Force
+        Write-ColorOutput "Installed DLL to module directory" $Green
+    }
+    
+    $generatedQmldir = Join-Path $buildDir "qmldir"
+    if (Test-Path $generatedQmldir) {
+        Copy-Item -Path $generatedQmldir -Destination $moduleDir -Force
+        Write-ColorOutput "Installed generated qmldir file" $Green
+    } elseif (Test-Path $qmldirSource) {
+        Copy-Item -Path $qmldirSource -Destination $moduleDir -Force
+        Write-ColorOutput "Copied qmldir from source directory" $Green
+    }
+    
+    $qmltypesFiles = Get-ChildItem -Path $buildDir -Filter "*.qmltypes" -ErrorAction SilentlyContinue
+    foreach ($qmltypes in $qmltypesFiles) {
+        Copy-Item -Path $qmltypes.FullName -Destination $moduleDir -Force
+        Write-ColorOutput "Installed QML type info: $($qmltypes.Name)" $Green
+    }
+    
+    Write-ColorOutput ""
     Write-ColorOutput "Build completed successfully!" $Green
     Write-ColorOutput "Output files are available in: $outputDir" $Green
+    Write-ColorOutput "VirtualDesktop module installed to: $moduleDir" $Green
     
 } catch {
     Write-ColorOutput "Error during build: $($_.Exception.Message)" $Red
@@ -522,6 +552,9 @@ set
 
 Write-ColorOutput ""
 Write-ColorOutput "Build script finished." $Green
+Write-ColorOutput "Reminder: set QML2_IMPORT_PATH to this directory before running 'qml .\windows.qml'" $Yellow
+Write-ColorOutput "Example: Set-Item -Path Env:QML2_IMPORT_PATH -Value '$scriptDir'" $Yellow
+Write-ColorOutput "Then run: qml .\windows.qml" $Yellow
 Write-ColorOutput "" $Green
 # Permanently add Qt bin to User PATH
 $currentUserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")

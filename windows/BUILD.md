@@ -45,7 +45,8 @@ The easiest way to build is using the provided PowerShell script:
 The script will:
 - Configure the project with CMake
 - Build the VirtualDesktopPlugin
-- Copy the compiled plugin to the `VirtualDesktop` directory
+- Copy the compiled plugin and qmldir to the `VirtualDesktop` directory
+- Add Qt bin directory to your PATH (if needed)
 - Display instructions for running the application
 
 ## Manual Build

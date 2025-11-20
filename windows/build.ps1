@@ -93,12 +93,14 @@ function Install-QtViaAqt {
     Write-ColorOutput "Installing Qt6 via Python aqtinstall (unattended)..." $Green
     Write-ColorOutput "This may take some time (downloading Qt archives)." $Yellow
 
-    # Desired Qt version and toolchain
     $qtVersion = '6.6.0'
-    $toolchain = 'msvc2022_64'
-    $installBase = "C:\Qt\$qtVersion"
+    $qtInstallRoot = "C:\Qt"
+    $qtVersionDir = Join-Path $qtInstallRoot $qtVersion
 
-    # Find Python executable (prefer 'python', fallback to 'py')
+    if (-not (Test-Path $qtInstallRoot)) {
+        New-Item -ItemType Directory -Path $qtInstallRoot -Force | Out-Null
+    }
+
     $pyExe = $null
     $pyExtraArgs = @()
     if (Get-Command python -ErrorAction SilentlyContinue) { $pyExe = 'python' }
@@ -108,7 +110,7 @@ function Install-QtViaAqt {
         Write-ColorOutput "Python 3 is required but was not found on PATH. Please install Python 3 and ensure 'python' or 'py' is available." $Red
         throw "Python 3 not found"
     }
-    # Ensure pip and aqtinstall are installed
+
     try {
         $pipArgs = $pyExtraArgs + @('-m','pip','install','--upgrade','pip','aqtinstall')
         Write-ColorOutput "Ensuring pip and aqtinstall are installed via: $pyExe $($pipArgs -join ' ')" $Green
@@ -119,25 +121,29 @@ function Install-QtViaAqt {
         throw $_
     }
 
-    # Run aqtinstall to fetch Qt
     try {
         Write-ColorOutput "Attempting to install Qt $qtVersion using known architecture tokens (may try several)..." $Green
 
-        # Try several MSVC2022 token variants first (some mirrors/name schemes use toolset suffixes like _143)
         $candidateTokens = @(
-            'win64_msvc2022_143', 'win64_msvc2022_64', 'win64_msvc2022',
-            'win64_msvc2021_64','win64_msvc2019_64','win64_mingw'
+            @{ Token='win64_msvc2022_143'; Toolchain='msvc2022_64' },
+            @{ Token='win64_msvc2022_64'; Toolchain='msvc2022_64' },
+            @{ Token='win64_msvc2022'; Toolchain='msvc2022_64' },
+            @{ Token='win64_msvc2021_64'; Toolchain='msvc2021_64' },
+            @{ Token='win64_msvc2019_64'; Toolchain='msvc2019_64' },
+            @{ Token='win64_mingw'; Toolchain='mingw_64' }
         )
+
         $selectedArch = $null
         foreach ($candidate in $candidateTokens) {
-            Write-ColorOutput "Trying architecture token: $candidate" $Yellow
-            $aqtArgs = $pyExtraArgs + @('-m','aqt') + @('install-qt','windows','desktop',$qtVersion,$candidate,'--outputdir',$installBase)
+            $token = $candidate.Token
+            Write-ColorOutput "Trying architecture token: $token" $Yellow
+            $aqtArgs = $pyExtraArgs + @('-m','aqt','install-qt','windows','desktop',$qtVersion,$token,'--outputdir',$qtInstallRoot)
             & $pyExe @aqtArgs 2>&1 | ForEach-Object { Write-Host $_ }
             if ($LASTEXITCODE -eq 0) {
                 $selectedArch = $candidate
                 break
             } else {
-                Write-ColorOutput "Install with $candidate failed (exit $LASTEXITCODE), trying next token..." $Yellow
+                Write-ColorOutput "Install with $token failed (exit $LASTEXITCODE), trying next token..." $Yellow
             }
         }
 
@@ -145,31 +151,138 @@ function Install-QtViaAqt {
             Write-ColorOutput "All known architecture tokens failed to install Qt $qtVersion. Please run 'python -m aqt list-qt windows desktop' to inspect available tokens and run the script with -QtPath manually." $Red
             throw "aqtinstall failed for all known tokens"
         }
-        Write-ColorOutput "Qt installation succeeded with architecture token: $selectedArch" $Green
+        Write-ColorOutput "Qt installation succeeded with architecture token: $($selectedArch.Token)" $Green
     } catch {
         Write-ColorOutput "Error during aqtinstall: $($_.Exception.Message)" $Red
         throw $_
     }
 
-    # Expected installed path: use the selected architecture token (e.g. 'win64_msvc2019_64')
-    $qtPath = Join-Path $installBase $selectedArch
-    if (Test-Path $qtPath) {
-        Write-ColorOutput "Qt installed successfully at: $qtPath" $Green
-        return $qtPath
+    if (-not (Test-Path $qtVersionDir)) {
+        throw "Qt installation completed but version directory not found at $qtVersionDir"
     }
 
-    # Fallback: attempt to locate any matching installed directory under $installBase
-    if (Test-Path $installBase) {
-        $found = Get-ChildItem -Path $installBase -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match [Regex]::Escape($selectedArch) -or $_.Name -match $toolchain }
-        if ($found) {
-            $qtPath = $found[0].FullName
-            Write-ColorOutput "Qt installed (found at: $qtPath)" $Green
-            return $qtPath
+    $nameHints = @()
+    if ($selectedArch.Toolchain) { $nameHints += $selectedArch.Toolchain }
+    if ($selectedArch.Token) {
+        $nameHints += $selectedArch.Token
+        if ($selectedArch.Token -match '^win(?:32|64)_(.+)$') {
+            $nameHints += $matches[1]
         }
     }
 
-    throw "Qt installation completed but Qt path not found under $installBase (expected token: $selectedArch)"
+    $nameHints = $nameHints | Where-Object { $_ } | Select-Object -Unique
+
+    foreach ($name in $nameHints) {
+        $candidatePath = Join-Path $qtVersionDir $name
+        if (Test-Path $candidatePath) {
+            Write-ColorOutput "Qt installed successfully at: $candidatePath" $Green
+            return $candidatePath
+        }
+    }
+
+    $recentKit = Get-ChildItem -Path $qtVersionDir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName "bin\qmake.exe") } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if ($recentKit) {
+        $kitPath = $recentKit.FullName
+        Write-ColorOutput "Qt installed successfully at: $kitPath" $Green
+        return $kitPath
+    }
+
+    $autoDetected = Find-QtInstallation
+    if ($autoDetected) {
+        Write-ColorOutput "Qt installed successfully at: $autoDetected" $Green
+        return $autoDetected
+    }
+
+    throw "Qt installation completed but Qt path not found under $qtVersionDir"
 }
+
+function Get-VsWherePath {
+    $possiblePaths = @(
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
+        "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
+    ) | Where-Object { $_ }
+
+    foreach ($path in $possiblePaths) {
+        if (Test-Path $path) { return $path }
+    }
+
+    return $null
+}
+
+function Get-VsInstallPath {
+    $vsWhere = Get-VsWherePath
+    if (-not $vsWhere) { return $null }
+
+    $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if ($LASTEXITCODE -ne 0) { return $null }
+    if ($vsPath) { return $vsPath.Trim() }
+
+    return $null
+}
+
+function Install-VisualStudioBuildTools {
+    Write-ColorOutput "Installing Visual Studio Build Tools (unattended)..." $Green
+    Write-ColorOutput "This may take several minutes." $Yellow
+
+    if (-not (Test-Admin)) {
+        throw "Administrator privileges are required to install Visual Studio Build Tools"
+    }
+
+    $installerUrl = "https://aka.ms/vs/17/release/vs_BuildTools.exe"
+    $tempInstaller = Join-Path ([System.IO.Path]::GetTempPath()) "vs_BuildTools.exe"
+
+    try {
+        Write-ColorOutput "Downloading Visual Studio Build Tools bootstrapper..." $Green
+        Invoke-WebRequest -Uri $installerUrl -OutFile $tempInstaller -UseBasicParsing
+    } catch {
+        throw "Failed to download Visual Studio Build Tools: $($_.Exception.Message)"
+    }
+
+    if (-not (Test-Path $tempInstaller)) {
+        throw "Visual Studio Build Tools bootstrapper download failed"
+    }
+
+    $arguments = @(
+        "--quiet",
+        "--wait",
+        "--norestart",
+        "--nocache",
+        "--add","Microsoft.VisualStudio.Workload.VCTools",
+        "--add","Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+        "--add","Microsoft.VisualStudio.Component.Windows10SDK.22621",
+        "--add","Microsoft.VisualStudio.Component.VC.CMake.Project",
+        "--includeRecommended"
+    )
+
+    try {
+        $process = Start-Process -FilePath $tempInstaller -ArgumentList $arguments -Wait -PassThru -NoNewWindow
+        if ($process.ExitCode -ne 0) {
+            throw "Installer exited with code $($process.ExitCode)"
+        }
+    } catch {
+        throw "Visual Studio Build Tools installation failed: $($_.Exception.Message)"
+    } finally {
+        if (Test-Path $tempInstaller) {
+            Remove-Item $tempInstaller -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Ensure-VisualStudioInstall {
+    $vsPath = Get-VsInstallPath
+    if ($vsPath) { return $vsPath }
+
+    Write-ColorOutput "Visual Studio C++ build tools not found. Installing automatically..." $Yellow
+    Install-VisualStudioBuildTools
+    Refresh-Path
+
+    return Get-VsInstallPath
+}
+
 
 # Check if running as Administrator
 if (-not (Test-Admin)) {
@@ -190,36 +303,22 @@ $outputDir = Join-Path $scriptDir "output"
 # Find Qt installation if not specified
 if (-not $QtPath) {
     Write-ColorOutput "Searching for Qt installation..." $Green
-    $detectedPath = Find-QtInstallation
-    if ($detectedPath) {
-        $QtPath = $detectedPath
+    $QtPath = Find-QtInstallation
+    if ($QtPath) {
         Write-ColorOutput "Auto-detected Qt at: $QtPath" $Green
     } else {
-        Write-ColorOutput "Error: Qt installation not found" $Red
-        Write-ColorOutput "The build needs a Qt kit (for example: C:\Qt\6.6.0\msvc2022_64)." $Yellow
-        Write-ColorOutput ""
-        
-        # Offer automated installation (uses Python aqtinstall)
-        $answer = Read-Host "Qt not found. Install Qt automatically using Python aqtinstall? (Y/N) [Y]"
-        if (-not $answer) { $answer = 'Y' }
+        Write-ColorOutput "Qt installation not found. Installing automatically..." $Yellow
+        if (-not (Test-Admin)) {
+            Write-ColorOutput "Administrator privileges are required to install Qt automatically. Please re-run this script from an elevated PowerShell session." $Red
+            exit 1
+        }
 
-        if ($answer.Trim().ToUpper().StartsWith('Y')) {
-            if (-not (Test-Admin)) {
-                Write-ColorOutput "Administrator privileges are required to install Qt. Please re-run this script from an elevated PowerShell (Run as Administrator)." $Yellow
-                exit
-            }
-
-            try {
-                $QtPath = Install-QtViaAqt
-            } catch {
-                Write-ColorOutput "Error during Qt installation: $($_.Exception.Message)" $Red
-                Write-ColorOutput ""
-                Write-ColorOutput "Please install Qt manually and specify the path:" $Yellow
-                Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
-                exit 1
-            }
-        } else {
-            Write-ColorOutput "Please specify the correct Qt path using -QtPath parameter" $Yellow
+        try {
+            $QtPath = Install-QtViaAqt
+        } catch {
+            Write-ColorOutput "Error during Qt installation: $($_.Exception.Message)" $Red
+            Write-ColorOutput ""
+            Write-ColorOutput "Please install Qt manually and specify the path:" $Yellow
             Write-ColorOutput "Example: .\build.ps1 -QtPath 'C:\Qt\6.6.0\msvc2022_64'" $Yellow
             exit 1
         }
@@ -258,21 +357,40 @@ Push-Location $buildDir
 try {
     # Setup Visual Studio environment for NMake
     Write-ColorOutput "Setting up Visual Studio environment..." $Green
-    
-    # Try to find and run vcvarsall.bat
-    $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (Test-Path $vsWhere) {
-        $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-        if ($vsPath) {
-            $vcvarsall = "$vsPath\VC\Auxiliary\Build\vcvarsall.bat"
-            if (Test-Path $vcvarsall) {
-                Write-ColorOutput "Found Visual Studio at: $vsPath" $Green
-                Write-ColorOutput "Running vcvarsall.bat to set up build environment..." $Green
-                
-                # Create a temporary batch file that will run vcvarsall and output environment
-                $tempBatch = [System.IO.Path]::GetTempFileName() + ".bat"
-                
-                @"
+
+    $vsPath = Get-VsInstallPath
+    if (-not $vsPath) {
+        if (-not (Test-Admin)) {
+            Write-ColorOutput "Visual Studio C++ build tools not found. Please run this script as Administrator so it can install the required components automatically." $Red
+            exit 1
+        }
+
+        try {
+            $vsPath = Ensure-VisualStudioInstall
+        } catch {
+            Write-ColorOutput "Failed to install Visual Studio Build Tools: $($_.Exception.Message)" $Red
+            exit 1
+        }
+    }
+
+    if (-not $vsPath) {
+        Write-ColorOutput "Unable to locate Visual Studio Build Tools even after attempting installation." $Red
+        exit 1
+    }
+
+    $vcvarsall = Join-Path $vsPath "VC\Auxiliary\Build\vcvarsall.bat"
+    if (-not (Test-Path $vcvarsall)) {
+        Write-ColorOutput "vcvarsall.bat not found at $vcvarsall" $Red
+        exit 1
+    }
+
+    Write-ColorOutput "Found Visual Studio at: $vsPath" $Green
+    Write-ColorOutput "Running vcvarsall.bat to set up build environment..." $Green
+
+    # Create a temporary batch file that will run vcvarsall and output environment
+    $tempBatch = [System.IO.Path]::GetTempFileName() + ".bat"
+
+    @"
 @echo off
 call "$vcvarsall" x64 >nul 2>&1
 if errorlevel 1 (
@@ -281,38 +399,28 @@ if errorlevel 1 (
 )
 set
 "@ | Out-File -FilePath $tempBatch -Encoding ASCII
-                
-                # Run the batch file and capture output
-                $result = & cmd.exe /c $tempBatch 2>&1
-                Remove-Item $tempBatch -ErrorAction SilentlyContinue
-                
-                # Parse and set environment variables
-                $envVarsSet = 0
-                foreach ($line in $result) {
-                    if ($line -match '^([^=]+)=(.*)$') {
-                        $varName = $matches[1]
-                        $varValue = $matches[2]
-                        # Set the environment variable in the current process
-                        [System.Environment]::SetEnvironmentVariable($varName, $varValue, "Process")
-                        $envVarsSet++
-                    }
-                }
-                
-                if ($envVarsSet -gt 0) {
-                    Write-ColorOutput "Visual Studio environment configured successfully ($envVarsSet environment variables set)." $Green
-                } else {
-                    Write-ColorOutput "Warning: No environment variables were captured from vcvarsall.bat" $Yellow
-                }
-            } else {
-                Write-ColorOutput "Warning: vcvarsall.bat not found at $vcvarsall" $Yellow
-            }
-        } else {
-            Write-ColorOutput "Warning: Visual Studio installation not found with required C++ tools" $Yellow
+
+    # Run the batch file and capture output
+    $result = & cmd.exe /c $tempBatch 2>&1
+    Remove-Item $tempBatch -ErrorAction SilentlyContinue
+
+    # Parse and set environment variables
+    $envVarsSet = 0
+    foreach ($line in $result) {
+        if ($line -match '^([^=]+)=(.*)$') {
+            $varName = $matches[1]
+            $varValue = $matches[2]
+            [System.Environment]::SetEnvironmentVariable($varName, $varValue, "Process")
+            $envVarsSet++
         }
-    } else {
-        Write-ColorOutput "Warning: Visual Studio installer (vswhere.exe) not found" $Yellow
     }
-    
+
+    if ($envVarsSet -gt 0) {
+        Write-ColorOutput "Visual Studio environment configured successfully ($envVarsSet environment variables set)." $Green
+    } else {
+        Write-ColorOutput "Warning: No environment variables were captured from vcvarsall.bat" $Yellow
+    }
+
     # Verify that nmake and cl are available
     Refresh-Path
     $nmakeFound = $false

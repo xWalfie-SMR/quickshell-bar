@@ -133,10 +133,19 @@ if exist "%BUILD_DIR%\VirtualDesktopPlugin.dll" (
     echo Warning: DLL not found at %BUILD_DIR%\VirtualDesktopPlugin.dll
 )
 
-REM Copy qmldir
-if exist "%PLUGIN_DIR%\qmldir" (
+REM Copy qmldir (prefer generated one)
+if exist "%BUILD_DIR%\qmldir" (
+    copy "%BUILD_DIR%\qmldir" "%OUTPUT_DIR%\" /y
+    echo Copied generated qmldir file
+) else if exist "%PLUGIN_DIR%\qmldir" (
     copy "%PLUGIN_DIR%\qmldir" "%OUTPUT_DIR%\" /y
-    echo Copied qmldir file
+    echo Copied qmldir file from source
+)
+
+REM Copy qmltypes file if generated
+if exist "%BUILD_DIR%\VirtualDesktopPlugin.qmltypes" (
+    copy "%BUILD_DIR%\VirtualDesktopPlugin.qmltypes" "%OUTPUT_DIR%\" /y
+    echo Copied QML type information file
 )
 
 REM Copy headers and source files
@@ -155,7 +164,7 @@ echo ========================================
 echo Build Complete!
 echo ========================================
 echo.
-echo Plugin files are located in:
+echo VirtualDesktop module installed to:
 echo %OUTPUT_DIR%
 echo.
 echo To run the application:

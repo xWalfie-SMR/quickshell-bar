@@ -151,24 +151,35 @@ function Install-QtViaAqt {
         throw $_
     }
 
-    # Expected installed path: use the selected architecture token (e.g. 'win64_msvc2019_64')
-    $qtPath = Join-Path $installBase $selectedArch
-    if (Test-Path $qtPath) {
-        Write-ColorOutput "Qt installed successfully at: $qtPath" $Green
-        return $qtPath
-    }
-
-    # Fallback: attempt to locate any matching installed directory under $installBase
+    # aqtinstall creates nested structure: $installBase/<version>/<toolchain>
+    # e.g., C:\Qt\6.6.0\6.6.0\msvc2019_64
+    # The architecture token (e.g., 'win64_msvc2019_64') differs from the directory name (e.g., 'msvc2019_64')
+    
+    # Look for version directories under $installBase
     if (Test-Path $installBase) {
-        $found = Get-ChildItem -Path $installBase -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match [Regex]::Escape($selectedArch) -or $_.Name -match $toolchain }
-        if ($found) {
-            $qtPath = $found[0].FullName
-            Write-ColorOutput "Qt installed (found at: $qtPath)" $Green
-            return $qtPath
+        $versionDirs = Get-ChildItem -Path $installBase -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
+        
+        foreach ($versionDir in $versionDirs) {
+            # Look for toolchain directories under the version directory
+            $toolchainDirs = Get-ChildItem -Path $versionDir.FullName -Directory -ErrorAction SilentlyContinue | Where-Object { 
+                $_.Name -match '(msvc|mingw|gcc|clang).*_64$' 
+            }
+            
+            if ($toolchainDirs) {
+                # Return the first toolchain found (prefer MSVC variants if multiple)
+                $preferred = $toolchainDirs | Where-Object { $_.Name -match 'msvc' } | Select-Object -First 1
+                if (-not $preferred) {
+                    $preferred = $toolchainDirs | Select-Object -First 1
+                }
+                
+                $qtPath = $preferred.FullName
+                Write-ColorOutput "Qt installed successfully at: $qtPath" $Green
+                return $qtPath
+            }
         }
     }
 
-    throw "Qt installation completed but Qt path not found under $installBase (expected token: $selectedArch)"
+    throw "Qt installation completed but Qt path not found under $installBase (expected version/toolchain structure)"
 }
 
 # Check if running as Administrator

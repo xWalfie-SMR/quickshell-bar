@@ -522,3 +522,13 @@ set
 
 Write-ColorOutput ""
 Write-ColorOutput "Build script finished." $Green
+Write-ColorOutput "" $Green
+# Permanently add Qt bin to User PATH
+$currentUserPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+if ($currentUserPath -notlike "*${QtPath}\bin*") {
+    $newUserPath = "$currentUserPath;${QtPath}\bin"
+    [System.Environment]::SetEnvironmentVariable("Path", $newUserPath, "User")
+    Write-ColorOutput "Permanently added Qt bin to User PATH: ${QtPath}\bin" $Green
+} else {
+    Write-ColorOutput "Qt bin already in User PATH: ${QtPath}\bin" $Yellow
+}

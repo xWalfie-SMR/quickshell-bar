@@ -14,10 +14,9 @@ A customizable status bar for both Hyprland (Linux) and Windows systems.
 ### Installation
 
 1. Clone this repository
-2. Ensure `arch-mauve.svg` is in the same directory as `shell.qml`
-3. Run Quickshell:
+2. Run Quickshell with the linux directory:
    ```bash
-   quickshell -p /path/to/quickshell-bar
+   quickshell -p /path/to/quickshell-bar/linux
    ```
 
 ### Features
@@ -30,13 +29,15 @@ A customizable status bar for both Hyprland (Linux) and Windows systems.
 
 ### Configuration
 
-Edit `shell.qml` to customize:
+Edit `linux/shell.qml` to customize:
 
 - Colors (border, workspace indicators)
 - Panel height and margins
 - Time/date format
 - Workspace count
 - Font sizes
+
+Customize fonts and icons in `linux/Globals.qml`.
 
 ## Windows Setup
 

@@ -33,7 +33,7 @@ The easiest way to build is using the provided PowerShell script:
    If you have Qt installed in a non-standard location, specify the path:
 
    ```powershell
-   .\build.ps1 -QtPath "C:\Qt\6.6.0\msvc2022_64"
+   .\build.ps1 -QtPath "C:\Qt\6.8.3\msvc2022_64"
    ```
 
 4. **Clean and rebuild (if needed)**

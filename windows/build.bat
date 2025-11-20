@@ -5,7 +5,7 @@ REM This script automatically builds the VirtualDesktopPlugin for Windows
 setlocal enabledelayedexpansion
 
 REM Default Qt path
-set QT_PATH=C:\Qt\6.5.0\msvc2019_64
+set QT_PATH=C:\Qt\6.8.3\msvc2022_64
 set CLEAN_BUILD=0
 
 REM Parse command line arguments
@@ -30,7 +30,7 @@ if not exist "%QT_PATH%" (
     choice /M "Qt not found. Install Qt via vcpkg and continue?"
     if errorlevel 2 (
         echo Please specify the correct Qt path and re-run the script.
-        echo   build.bat "C:\Qt\6.6.0\msvc2022_64"
+        echo   build.bat "C:\Qt\6.8.3\msvc2022_64"
         exit /b 1
     )
 

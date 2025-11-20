@@ -268,12 +268,41 @@ try {
             if (Test-Path $vcvarsall) {
                 Write-ColorOutput "Found Visual Studio at: $vsPath" $Green
                 Write-ColorOutput "Running vcvarsall.bat to set up build environment..." $Green
-                cmd /c "`"$vcvarsall`" x64 && set" | ForEach-Object {
-                    if ($_ -match '^(.+?)=(.*)$') {
-                        [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+                
+                # Create a temporary batch file that will run vcvarsall and output environment
+                $tempBatch = [System.IO.Path]::GetTempFileName() + ".bat"
+                
+                @"
+@echo off
+call "$vcvarsall" x64 >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: vcvarsall.bat failed
+    exit /b 1
+)
+set
+"@ | Out-File -FilePath $tempBatch -Encoding ASCII
+                
+                # Run the batch file and capture output
+                $result = & cmd.exe /c $tempBatch 2>&1
+                Remove-Item $tempBatch -ErrorAction SilentlyContinue
+                
+                # Parse and set environment variables
+                $envVarsSet = 0
+                foreach ($line in $result) {
+                    if ($line -match '^([^=]+)=(.*)$') {
+                        $varName = $matches[1]
+                        $varValue = $matches[2]
+                        # Set the environment variable in the current process
+                        [System.Environment]::SetEnvironmentVariable($varName, $varValue, "Process")
+                        $envVarsSet++
                     }
                 }
-                Write-ColorOutput "Visual Studio environment configured successfully." $Green
+                
+                if ($envVarsSet -gt 0) {
+                    Write-ColorOutput "Visual Studio environment configured successfully ($envVarsSet environment variables set)." $Green
+                } else {
+                    Write-ColorOutput "Warning: No environment variables were captured from vcvarsall.bat" $Yellow
+                }
             } else {
                 Write-ColorOutput "Warning: vcvarsall.bat not found at $vcvarsall" $Yellow
             }
@@ -286,16 +315,27 @@ try {
     
     # Verify that nmake and cl are available
     Refresh-Path
+    $nmakeFound = $false
     try {
-        $nmakeVersion = nmake /? 2>&1 | Select-Object -First 1
-        if ($LASTEXITCODE -eq 0) {
-            Write-ColorOutput "NMake is available" $Green
-        } else {
-            throw "NMake not found"
+        $nmakeTest = Get-Command nmake -ErrorAction SilentlyContinue
+        if ($nmakeTest) {
+            $nmakeVersion = & nmake /? 2>&1 | Select-Object -First 1
+            Write-ColorOutput "NMake is available: $nmakeVersion" $Green
+            $nmakeFound = $true
         }
     } catch {
+        # Silently continue to the error message below
+    }
+    
+    if (-not $nmakeFound) {
         Write-ColorOutput "Error: NMake not found in PATH. Make sure Visual Studio is properly installed and configured." $Red
-        Write-ColorOutput "You may need to run this script from a Developer Command Prompt, or install Visual Studio with C++ tools." $Yellow
+        Write-ColorOutput "You may need to install Visual Studio with C++ tools." $Yellow
+        Write-ColorOutput ""
+        Write-ColorOutput "To install Visual Studio with C++ tools:" $Yellow
+        Write-ColorOutput "1. Download Visual Studio from https://visualstudio.microsoft.com/downloads/" $Yellow
+        Write-ColorOutput "2. Run the installer and select 'Desktop development with C++'" $Yellow
+        Write-ColorOutput "3. Make sure 'MSVC v143 - VS 2022 C++ x64/x86 build tools' is checked" $Yellow
+        Write-ColorOutput "4. Complete the installation and re-run this script" $Yellow
         exit 1
     }
     

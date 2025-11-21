@@ -55,9 +55,7 @@ Window {
         // Virtual Desktops/Workspaces
         Row {
             id: desktops
-            anchors.left: parent.left
-            anchors.leftMargin: 70
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.centerIn: parent
             spacing: 12
 
             Repeater {

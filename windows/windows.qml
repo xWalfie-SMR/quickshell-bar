@@ -52,32 +52,27 @@ Window {
             color: "#45475a"
         }
 
-        // Virtual Desktops/Workspaces
+        // Active Windows
         Row {
-            id: desktops
+            id: windows
             anchors.left: parent.left
             anchors.leftMargin: 70
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 12
+            spacing: 8
 
             Repeater {
-                model: windowManager.desktops
+                model: windowManager.windows
 
                 Rectangle {
                     required property var modelData
                     required property int index
 
-                    width: modelData.isActive ? 60 : 20
-                    height: 20
-                    radius: 10
-                    color: modelData.isActive ? "#cba6f7" : "#45475a"
-
-                    Behavior on width {
-                        NumberAnimation {
-                            duration: 200
-                            easing.type: Easing.OutCubic
-                        }
-                    }
+                    width: windowTitle.implicitWidth + 20
+                    height: 30
+                    radius: 8
+                    color: modelData.isActive ? "#cba6f7" : "#313244"
+                    border.color: modelData.isActive ? "#cba6f7" : "#45475a"
+                    border.width: 2
 
                     Behavior on color {
                         ColorAnimation {
@@ -86,10 +81,34 @@ Window {
                         }
                     }
 
+                    Behavior on border.color {
+                        ColorAnimation {
+                            duration: 200
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    Text {
+                        id: windowTitle
+                        anchors.centerIn: parent
+                        text: modelData.title.length > 30 ? modelData.title.substring(0, 30) + "..." : modelData.title
+                        color: modelData.isActive ? "#1e1e2e" : "#cdd6f4"
+                        font.pixelSize: 13
+                        font.family: "Comfortaa"
+                        font.bold: modelData.isActive
+
+                        Behavior on color {
+                            ColorAnimation {
+                                duration: 200
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+                    }
+
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            windowManager.switchToDesktop(index);
+                            windowManager.activateWindow(index);
                         }
                     }
                 }

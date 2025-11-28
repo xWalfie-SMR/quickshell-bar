@@ -1,7 +1,0 @@
-module VirtualDesktop
-linktarget VirtualDesktopPlugin
-optional plugin VirtualDesktopPlugin
-classname VirtualDesktopPlugin
-typeinfo VirtualDesktopPlugin.qmltypes
-prefer :/VirtualDesktop/
-

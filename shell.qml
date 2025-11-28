@@ -24,7 +24,7 @@ ShellRoot {
             anchors.fill: parent
             color: '#1e1e2e'
             border.color: '#cba6f7'
-            border.width: 5
+            border.width: 3
             radius: 16
         }
 
